@@ -69,7 +69,7 @@ public class FeatureGroupEngine {
     }
 
     if (featureGroup.getFeatureStore() != null) {
-      featureGroup.setFeatures(features);
+      featureGroup.setFeatures(utils.parseFeatureGroupSchema(dataset));
     }
 
     LOGGER.info("Featuregroup features: " + featureGroup.getFeatures());
