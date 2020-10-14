@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.logicalclocks.hsfs.engine.FeatureGroupEngine;
 import com.logicalclocks.hsfs.engine.StatisticsEngine;
+import com.logicalclocks.hsfs.util.Constants;
 import com.logicalclocks.hsfs.metadata.FeatureGroupBase;
 import com.logicalclocks.hsfs.metadata.Statistics;
 import lombok.Builder;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -48,6 +50,10 @@ public class FeatureGroup extends FeatureGroupBase {
 
   @Getter @Setter
   private String type = "cachedFeaturegroupDTO";
+
+  // TODO (davit): this must be Getter only.
+  @Getter @Setter
+  protected String location;
 
   @Getter @Setter
   @JsonProperty("descStatsEnabled")
@@ -80,9 +86,9 @@ public class FeatureGroup extends FeatureGroupBase {
   @Builder
   public FeatureGroup(FeatureStore featureStore, @NonNull String name, Integer version, String description,
                       List<String> primaryKeys, List<String> partitionKeys, boolean onlineEnabled,
-                      Storage defaultStorage, List<Feature> features, Boolean statisticsEnabled, Boolean histograms,
-                      Boolean correlations, List<String> statisticColumns)
-      throws FeatureStoreException {
+                      TimeTravelFormat timeTravelFormat, Storage defaultStorage, List<Feature> features,
+                      Boolean statisticsEnabled, Boolean histograms, Boolean correlations,
+                      List<String> statisticColumns) {
 
     this.featureStore = featureStore;
     this.name = name;
@@ -91,6 +97,7 @@ public class FeatureGroup extends FeatureGroupBase {
     this.primaryKeys = primaryKeys;
     this.partitionKeys = partitionKeys;
     this.onlineEnabled = onlineEnabled;
+    this.timeTravelFormat = timeTravelFormat != null ? timeTravelFormat : TimeTravelFormat.HUDI;
     this.defaultStorage = defaultStorage != null ? defaultStorage : Storage.OFFLINE;
     this.features = features;
     this.statisticsEnabled = statisticsEnabled != null ? statisticsEnabled : true;
@@ -110,6 +117,16 @@ public class FeatureGroup extends FeatureGroupBase {
     return selectAll().read(storage);
   }
 
+  // Time travel queries
+  public Dataset<Row> read(String wallclocktime) throws FeatureStoreException, IOException {
+    return selectAll().asOf(wallclocktime).read(this.defaultStorage);
+  }
+
+  public Dataset<Row> readChanges(String startWallclocktime, String endWallclocktime)
+      throws FeatureStoreException, IOException {
+    return selectAll().pullChanges(startWallclocktime, endWallclocktime).read(this.defaultStorage);
+  }
+
   public void show(int numRows) throws FeatureStoreException, IOException {
     show(numRows, defaultStorage);
   }
@@ -124,35 +141,81 @@ public class FeatureGroup extends FeatureGroupBase {
 
   public void save(Dataset<Row> featureData, Map<String, String> writeOptions)
       throws FeatureStoreException, IOException {
-    featureGroupEngine.saveFeatureGroup(this, featureData, primaryKeys, partitionKeys, defaultStorage, writeOptions);
+
+    featureGroupEngine.saveFeatureGroup(this, featureData, primaryKeys, partitionKeys,
+            defaultStorage, writeOptions);
+
     if (statisticsEnabled) {
       statisticsEngine.computeStatistics(this, featureData);
     }
   }
 
-  public void insert(Dataset<Row> featureData, Storage storage) throws IOException, FeatureStoreException {
-    insert(featureData, storage, false, null);
+  public void insert(Dataset<Row> featureData, Storage storage)
+      throws IOException, FeatureStoreException {
+    insert(featureData, storage, false, null, null);
   }
 
-  public void insert(Dataset<Row> featureData, boolean overwrite) throws IOException, FeatureStoreException {
+  public void insert(Dataset<Row> featureData, boolean overwrite)
+      throws IOException, FeatureStoreException {
     insert(featureData, overwrite, null);
   }
 
   public void insert(Dataset<Row> featureData, Storage storage, boolean overwrite)
       throws IOException, FeatureStoreException {
-    insert(featureData, storage, overwrite, null);
+    insert(featureData, storage, overwrite, null,  null);
+  }
+
+  // time-travel enabled insert with upsert op
+  public void insert(Dataset<Row> featureData, String operation)
+      throws FeatureStoreException, IOException {
+
+    List<String> supportedOps = Arrays.asList(Constants.HUDI_UPSERT, Constants.HUDI_INSERT);
+
+    if (!supportedOps.stream().anyMatch(x -> x.equalsIgnoreCase(operation))) {
+      throw new IllegalArgumentException("For inserting in time travel enabled feature group only operations "
+              + Constants.HUDI_UPSERT + " and " + Constants.HUDI_INSERT + " are supported");
+    }
+
+    insert(featureData, defaultStorage, false, operation, null);
   }
 
   public void insert(Dataset<Row> featureData, boolean overwrite, Map<String, String> writeOptions)
       throws FeatureStoreException, IOException {
-    insert(featureData, defaultStorage, overwrite, writeOptions);
+    insert(featureData, defaultStorage, overwrite, null, writeOptions);
   }
 
-  public void insert(Dataset<Row> featureData, Storage storage, boolean overwrite, Map<String, String> writeOptions)
+  public void insert(Dataset<Row> featureData, Storage storage, boolean overwrite, String operation,
+                     Map<String, String> writeOptions)
       throws FeatureStoreException, IOException {
+
+    // operation is only valid for time travel enabled feature group
+    if (this.timeTravelFormat == TimeTravelFormat.NONE && operation != null) {
+      throw new IllegalArgumentException("Argument operation is only valid for "
+              + "time travel enabled feature group");
+    }
+
     featureGroupEngine.saveDataframe(this, featureData, storage,
-        overwrite ? SaveMode.Overwrite : SaveMode.Append, writeOptions);
+        overwrite ? SaveMode.Overwrite : SaveMode.Append, operation,
+            writeOptions);
+
     computeStatistics();
+  }
+
+
+  public void delete(Dataset<Row> featureData)
+      throws FeatureStoreException, IOException {
+
+    // operation is only valid for time travel enabled feature group
+    if (this.timeTravelFormat == TimeTravelFormat.NONE) {
+      throw new FeatureStoreException("delete function is only valid for "
+          + "time travel enabled feature group");
+    }
+
+    featureGroupEngine.commitDelete(this, featureData);
+  }
+
+  public FeatureGroupCommit[] commitDetails(Integer limit) throws IOException, FeatureStoreException {
+    return featureGroupEngine.commitDetails(this, limit);
   }
 
   /**
@@ -163,6 +226,7 @@ public class FeatureGroup extends FeatureGroupBase {
    * @throws FeatureStoreException
    * @throws IOException
    */
+
   public void updateStatisticsConfig() throws FeatureStoreException, IOException {
     featureGroupEngine.updateStatisticsConfig(this);
   }

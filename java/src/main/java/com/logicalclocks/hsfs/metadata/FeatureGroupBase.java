@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.logicalclocks.hsfs.Feature;
 import com.logicalclocks.hsfs.FeatureStore;
 import com.logicalclocks.hsfs.FeatureStoreException;
+import com.logicalclocks.hsfs.TimeTravelFormat;
 import com.logicalclocks.hsfs.engine.FeatureGroupBaseEngine;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +38,9 @@ public abstract class FeatureGroupBase {
 
   @Getter @Setter
   protected FeatureStore featureStore;
+
+  @Getter @Setter
+  protected TimeTravelFormat timeTravelFormat;
 
   @Getter @Setter
   protected String name;
@@ -58,15 +62,15 @@ public abstract class FeatureGroupBase {
 
   private FeatureGroupBaseEngine featureGroupBaseEngine = new FeatureGroupBaseEngine();
 
-  public Query selectFeatures(List<Feature> features) throws FeatureStoreException, IOException {
+  public Query selectFeatures(List<Feature> features) {
     return new Query(this, features);
   }
 
-  public Query selectAll() throws FeatureStoreException, IOException {
+  public Query selectAll() {
     return new Query(this, getFeatures());
   }
 
-  public Query select(List<String> features) throws FeatureStoreException, IOException {
+  public Query select(List<String> features) {
     // Create a feature object for each string feature given by the user.
     // For the query building each feature need only the name set.
     List<Feature> featureObjList  = features.stream().map(Feature::new).collect(Collectors.toList());

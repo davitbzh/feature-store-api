@@ -18,6 +18,7 @@ package com.logicalclocks.hsfs.metadata;
 
 import com.damnhandy.uri.template.UriTemplate;
 import com.logicalclocks.hsfs.FeatureGroup;
+import com.logicalclocks.hsfs.FeatureGroupCommit;
 import com.logicalclocks.hsfs.FeatureStore;
 import com.logicalclocks.hsfs.FeatureStoreException;
 import com.logicalclocks.hsfs.OnDemandFeatureGroup;
@@ -39,6 +40,8 @@ public class FeatureGroupApi {
   public static final String FEATURE_GROUP_ROOT_PATH = "/featuregroups";
   public static final String FEATURE_GROUP_PATH = FEATURE_GROUP_ROOT_PATH + "{/fgName}{?version}";
   public static final String FEATURE_GROUP_ID_PATH = FEATURE_GROUP_ROOT_PATH + "{/fgId}{?updateStatsSettings}";
+  public static final String FEATURE_GROUP_COMMIT_PATH = FEATURE_GROUP_ID_PATH
+      + "/commit{?limit}";
   public static final String FEATURE_GROUP_CLEAR_PATH = FEATURE_GROUP_ID_PATH + "/clear";
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FeatureGroupApi.class);
@@ -155,8 +158,49 @@ public class FeatureGroupApi {
     hopsworksClient.handleRequest(postRequest);
   }
 
-  public FeatureGroup updateStatsConfig(FeatureGroup featureGroup)
+  public FeatureGroupCommit featureGroupCommit(FeatureGroup featureGroup, FeatureGroupCommit featureGroupCommit)
       throws FeatureStoreException, IOException {
+    HopsworksClient hopsworksClient = HopsworksClient.getInstance();
+    String pathTemplate = PROJECT_PATH
+        + FeatureStoreApi.FEATURE_STORE_PATH
+        + FEATURE_GROUP_COMMIT_PATH;
+
+    String uri = UriTemplate.fromTemplate(pathTemplate)
+        .set("projectId", featureGroup.getFeatureStore().getProjectId())
+        .set("fsId", featureGroup.getFeatureStore().getId())
+        .set("fgId", featureGroup.getId())
+        .expand();
+
+    String featureGroupCommitJson = hopsworksClient.getObjectMapper().writeValueAsString(featureGroupCommit);
+    HttpPost postRequest = new HttpPost(uri);
+    postRequest.setHeader(HttpHeaders.CONTENT_TYPE, "application/json");
+    postRequest.setEntity(new StringEntity(featureGroupCommitJson));
+
+    LOGGER.info("Sending metadata request: " + uri);
+    return hopsworksClient.handleRequest(postRequest, FeatureGroupCommit.class);
+  }
+
+  public FeatureGroupCommit[] commitDetails(FeatureGroupBase featureGroupBase, Integer limit)
+      throws IOException, FeatureStoreException {
+    HopsworksClient hopsworksClient = HopsworksClient.getInstance();
+    String pathTemplate = PROJECT_PATH
+        + FeatureStoreApi.FEATURE_STORE_PATH
+        + FEATURE_GROUP_COMMIT_PATH;
+
+    String uri = UriTemplate.fromTemplate(pathTemplate)
+        .set("projectId", featureGroupBase.getFeatureStore().getProjectId())
+        .set("fsId", featureGroupBase.getFeatureStore().getId())
+        .set("fgId", featureGroupBase.getId())
+        .set("limit", limit)
+        .expand();
+
+    LOGGER.info("Sending metadata request: " + uri);
+    FeatureGroupCommit[] commitDetails = hopsworksClient.handleRequest(new HttpGet(uri), FeatureGroupCommit[].class);
+
+    return commitDetails;
+  }
+
+  public FeatureGroup updateStatsConfig(FeatureGroup featureGroup) throws FeatureStoreException, IOException {
     HopsworksClient hopsworksClient = HopsworksClient.getInstance();
     String pathTemplate = PROJECT_PATH
         + FeatureStoreApi.FEATURE_STORE_PATH
@@ -178,5 +222,8 @@ public class FeatureGroupApi {
     LOGGER.info(featureGroupJson);
 
     return hopsworksClient.handleRequest(putRequest, FeatureGroup.class);
+
   }
+
 }
+

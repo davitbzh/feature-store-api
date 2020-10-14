@@ -41,7 +41,7 @@ public class Utils {
     for (StructField structField : dataset.schema().fields()) {
       // TODO(Fabio): unit test this one for complext types
       features.add(new Feature(structField.name(), structField.dataType().catalogString(),
-          structField.dataType().catalogString(), false, false));
+          structField.dataType().catalogString(), false, false, false));
     }
 
     return features;
@@ -86,10 +86,21 @@ public class Utils {
         .map(Feature::getName)
         .collect(Collectors.toList());
 
+
     return JavaConverters.asScalaIteratorConverter(partitionCols.iterator()).asScala().toSeq();
+  }
+
+  public Seq<String> getPrimaryColumns(FeatureGroup offlineFeatureGroup) {
+    List<String> primaryCols = offlineFeatureGroup.getFeatures().stream()
+            .filter(Feature::getPrimary)
+            .map(Feature::getName)
+            .collect(Collectors.toList());
+
+    return JavaConverters.asScalaIteratorConverter(primaryCols.iterator()).asScala().toSeq();
   }
 
   public String getFgName(FeatureGroup featureGroup) {
     return featureGroup.getName() + "_" + featureGroup.getVersion();
   }
+
 }

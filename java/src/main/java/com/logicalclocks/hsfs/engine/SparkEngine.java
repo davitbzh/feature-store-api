@@ -21,21 +21,25 @@ import com.amazon.deequ.profiles.ColumnProfilerRunner;
 import com.amazon.deequ.profiles.ColumnProfiles;
 import com.logicalclocks.hsfs.DataFormat;
 import com.logicalclocks.hsfs.FeatureGroup;
+import com.logicalclocks.hsfs.FeatureGroupCommit;
 import com.logicalclocks.hsfs.FeatureStoreException;
 import com.logicalclocks.hsfs.Split;
 import com.logicalclocks.hsfs.StorageConnector;
 import com.logicalclocks.hsfs.StorageConnectorType;
 import com.logicalclocks.hsfs.TrainingDataset;
+import com.logicalclocks.hsfs.TimeTravelFormat;
 import com.logicalclocks.hsfs.util.Constants;
 import lombok.Getter;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.Strings;
+
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
 import scala.collection.JavaConverters;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +58,9 @@ public class SparkEngine {
 
   @Getter
   private SparkSession sparkSession;
+
   private Utils utils = new Utils();
+  private HudiEngine hudiEngine = new HudiEngine();
 
   private SparkEngine() {
     sparkSession = SparkSession.builder()
@@ -83,6 +89,13 @@ public class SparkEngine {
       throws FeatureStoreException {
     Dataset<Row> queryDataset = jdbc(storageConnector, query);
     queryDataset.createOrReplaceTempView(alias);
+  }
+
+  public void registerHudiTemporaryTable(FeatureGroup featureGroup, String alias,
+                                         Long leftFeaturegroupStartTimestamp, Long leftFeaturegroupEndTimestamp) {
+    hudiEngine.registerTemporaryTable(sparkSession,  featureGroup, alias,
+        leftFeaturegroupStartTimestamp,
+        leftFeaturegroupEndTimestamp);
   }
 
   public void configureConnector(StorageConnector storageConnector) {
@@ -296,15 +309,29 @@ public class SparkEngine {
 
 
   public void writeOfflineDataframe(FeatureGroup featureGroup, Dataset<Row> dataset,
-                                    SaveMode saveMode, Map<String, String> writeOptions) {
+                                    SaveMode saveMode, String operation, Map<String, String> writeOptions)
+      throws IOException, FeatureStoreException {
+
+    if (featureGroup.getTimeTravelFormat() == TimeTravelFormat.HUDI) {
+      hudiEngine.saveHudiFeatureGroup(sparkSession,featureGroup, dataset, saveMode, operation);
+    } else {
+      writeSparkDataset(featureGroup, dataset, saveMode,  writeOptions);
+    }
+
+  }
+
+  private void writeSparkDataset(FeatureGroup featureGroup, Dataset<Row> dataset,
+                                 SaveMode saveMode,  Map<String, String> writeOptions) {
+
     dataset
-        .write()
-        .format(Constants.HIVE_FORMAT)
-        .mode(saveMode)
-        // write options cannot be null
-        .options(writeOptions == null ? new HashMap<>() : writeOptions)
-        .partitionBy(utils.getPartitionColumns(featureGroup))
-        .saveAsTable(utils.getTableName(featureGroup));
+            .write()
+            .format(Constants.HIVE_FORMAT)
+            .mode(saveMode)
+            // write options cannot be null
+            .options(writeOptions == null ? new HashMap<>() : writeOptions)
+            .partitionBy(utils.getPartitionColumns(featureGroup))
+            .saveAsTable(utils.getTableName(featureGroup));
+
   }
 
   public String profile(Dataset<Row> df, List<String> restrictToColumns, Boolean correlation, Boolean histogram) {
@@ -334,5 +361,11 @@ public class SparkEngine {
 
   public String profile(Dataset<Row> df) {
     return profile(df, null, true, true);
+  }
+
+  public FeatureGroupCommit commitDelete(FeatureGroup featureGroup, Dataset<Row> deleteDF)
+      throws IOException, FeatureStoreException {
+    FeatureGroupCommit featureGroupCommit = hudiEngine.deleteRecord(sparkSession, featureGroup, deleteDF);
+    return featureGroupCommit;
   }
 }
