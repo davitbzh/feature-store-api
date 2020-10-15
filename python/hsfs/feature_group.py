@@ -67,7 +67,7 @@ class FeatureGroup(feature_group_base.FeatureGroupBase):
         self._location = location
         self._jobs = jobs
         self._online_enabled = online_enabled
-        self._time_travel_fomat = (time_travel_fomat,)
+        self._time_travel_fomat = time_travel_fomat
         self._default_storage = default_storage
         self._hudi_enabled = hudi_enabled
 

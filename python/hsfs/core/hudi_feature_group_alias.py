@@ -20,11 +20,19 @@ from hsfs import feature_group
 
 
 class HudiFeatureGroupAlias:
-    def __init__(self, hudi_feature_group, alias):
+    def __init__(
+            self,
+            hudi_feature_group,
+            alias,
+            left_featuregroup_starttimestamp,
+            left_featuregroup_endtimestamp,
+    ):
         self._hudi_feature_group = feature_group.FeatureGroup.from_response_json(
             hudi_feature_group
         )
         self._alias = alias
+        self._left_featuregroup_starttimestamp = left_featuregroup_starttimestamp
+        self._left_featuregroup_endtimestamp = left_featuregroup_endtimestamp
 
     @classmethod
     def from_response_json(cls, json_dict):
@@ -32,9 +40,17 @@ class HudiFeatureGroupAlias:
         return cls(**json_decamelized)
 
     @property
-    def hudi_feature_group(self):
-        return self._hudi_feature_group
+    def on_demand_feature_group(self):
+        return self._on_demand_feature_group
 
     @property
     def alias(self):
         return self._alias
+
+    @property
+    def left_featuregroup_starttimestamp(self):
+        return self._left_featuregroup_starttimestamp
+
+    @property
+    def left_featuregroup_endtimestamp(self):
+        return self._left_featuregroup_endtimestamp

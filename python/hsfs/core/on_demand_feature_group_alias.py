@@ -20,19 +20,11 @@ from hsfs import on_demand_feature_group as on_demand_fg
 
 
 class OnDemandFeatureGroupAlias:
-    def __init__(
-        self,
-        on_demand_feature_group,
-        alias,
-        left_featuregroup_starttimestamp,
-        left_featuregroup_endtimestamp,
-    ):
+    def __init__(self, on_demand_feature_group, alias):
         self._on_demand_feature_group = on_demand_fg.OnDemandFeatureGroup.from_response_json(
             on_demand_feature_group
         )
         self._alias = alias
-        self._left_featuregroup_starttimestamp = left_featuregroup_starttimestamp
-        self._left_featuregroup_endtimestamp = left_featuregroup_endtimestamp
 
     @classmethod
     def from_response_json(cls, json_dict):
@@ -46,11 +38,3 @@ class OnDemandFeatureGroupAlias:
     @property
     def alias(self):
         return self._alias
-
-    @property
-    def left_featuregroup_starttimestamp(self):
-        return self._left_featuregroup_starttimestamp
-
-    @property
-    def left_featuregroup_endtimestamp(self):
-        return self._left_featuregroup_endtimestamp
