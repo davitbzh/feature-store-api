@@ -21,11 +21,11 @@ from hsfs import feature_group
 
 class HudiFeatureGroupAlias:
     def __init__(
-            self,
-            hudi_feature_group,
-            alias,
-            left_featuregroup_starttimestamp,
-            left_featuregroup_endtimestamp,
+        self,
+        hudi_feature_group,
+        alias,
+        left_featuregroup_starttimestamp,
+        left_featuregroup_endtimestamp,
     ):
         self._hudi_feature_group = feature_group.FeatureGroup.from_response_json(
             hudi_feature_group
