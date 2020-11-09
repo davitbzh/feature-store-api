@@ -18,6 +18,7 @@ package com.logicalclocks.hsfs.engine;
 
 import com.logicalclocks.hsfs.EntityEndpointType;
 import com.logicalclocks.hsfs.FeatureStoreException;
+import com.logicalclocks.hsfs.TimeTravelFormat;
 import com.logicalclocks.hsfs.TrainingDataset;
 import com.logicalclocks.hsfs.metadata.FeatureGroupBase;
 import com.logicalclocks.hsfs.metadata.Statistics;
@@ -31,10 +32,12 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 public class StatisticsEngine {
 
   private StatisticsApi statisticsApi;
+  private FeatureGroupEngine featureGroupEngine = new FeatureGroupEngine();
 
   private static final Logger LOGGER = LoggerFactory.getLogger(StatisticsEngine.class);
 
@@ -45,22 +48,33 @@ public class StatisticsEngine {
   public Statistics computeStatistics(TrainingDataset trainingDataset, Dataset<Row> dataFrame)
       throws FeatureStoreException, IOException {
     return statisticsApi.post(trainingDataset, computeStatistics(dataFrame, trainingDataset.getStatisticColumns(),
-        trainingDataset.getHistograms(), trainingDataset.getCorrelations()));
+      trainingDataset.getHistograms(), trainingDataset.getCorrelations(), null));
   }
 
   public Statistics computeStatistics(FeatureGroupBase featureGroup, Dataset<Row> dataFrame)
       throws FeatureStoreException, IOException {
+
+    String commitTime = null;
+    if (featureGroup.getTimeTravelFormat() == TimeTravelFormat.HUDI) {
+      Map<String, Map<String, String>> commitMetaDatas = featureGroupEngine.commitDetails(featureGroup, 1);
+      Map<String, String> lastestCommitMetaData = commitMetaDatas.get(commitMetaDatas.keySet().toArray()[0]);
+      commitTime = lastestCommitMetaData.get("committedOn");
+    }
     return statisticsApi.post(featureGroup, computeStatistics(dataFrame, featureGroup.getStatisticColumns(),
-        featureGroup.getHistograms(), featureGroup.getCorrelations()));
+      featureGroup.getHistograms(), featureGroup.getCorrelations(), commitTime));
   }
 
   private Statistics computeStatistics(Dataset<Row> dataFrame, List<String> statisticColumns, Boolean histograms,
-                                       Boolean correlations) throws FeatureStoreException {
+                                       Boolean correlations, String commitTime) throws FeatureStoreException {
     if (dataFrame.isEmpty()) {
       throw new FeatureStoreException("There is no data in the entity that you are trying to compute statistics for. A "
           + "possible cause might be that you inserted only data to the online storage of a feature group.");
     }
-    String commitTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+
+    if (commitTime == null) {
+      commitTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+    }
+
     String content = SparkEngine.getInstance().profile(dataFrame, statisticColumns, histograms, correlations);
     return new Statistics(commitTime, content);
   }

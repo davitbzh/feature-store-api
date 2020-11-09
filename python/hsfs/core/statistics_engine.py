@@ -27,9 +27,10 @@ class StatisticsEngine:
             feature_store_id, entity_type
         )
 
-    def compute_statistics(self, metadata_instance, feature_dataframe):
+    def compute_statistics(self, metadata_instance, feature_dataframe, commit_str=None):
         """Compute statistics for a dataframe and send the result json to Hopsworks."""
-        commit_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        if commit_str is None:
+            commit_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         if len(feature_dataframe.head(1)) == 0:
             raise exceptions.FeatureStoreException(
                 "There is no data in the entity that you are trying to compute "
