@@ -367,7 +367,10 @@ class FeatureGroup(FeatureGroupBase):
             self._primary_key = primary_key
             self._partition_key = partition_key
             self._hudi_precombine_key = (
-                hudi_precombine_key if time_travel_format.upper() == "HUDI" else None
+                hudi_precombine_key
+                if time_travel_format is not None
+                and time_travel_format.upper() == "HUDI"
+                else None
             )
 
         self._feature_group_engine = feature_group_engine.FeatureGroupEngine(
@@ -614,8 +617,7 @@ class FeatureGroup(FeatureGroupBase):
             write_options,
         )
 
-        if self.statistics_config.enabled:
-            self._statistics_engine.compute_statistics(self, self.read())
+        self.compute_statistics()
 
     def commit_details(self, limit: Optional[int] = None):
         """Retrieves commit timeline for this feature group.
