@@ -14,10 +14,8 @@
 #   limitations under the License.
 #
 
-import datetime
-
 from hsfs import engine, statistics
-from hsfs.core import statistics_api, feature_group_engine
+from hsfs.core import statistics_api
 from hsfs.client import exceptions
 
 
@@ -27,18 +25,7 @@ class StatisticsEngine:
             feature_store_id, entity_type
         )
 
-    def compute_statistics(self, metadata_instance, feature_dataframe):
-        """Compute statistics for a dataframe and send the result json to Hopsworks."""
-        if metadata_instance.time_travel_format == "HUDI":
-            last_commit_details = list(
-                feature_group_engine.commit_details(self, 1).values()
-            )[0]
-            commit_str = last_commit_details.get("committedOn")
-        else:
-            commit_str = None
-
-        if commit_str is None:
-            commit_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    def compute_statistics(self, metadata_instance, feature_dataframe, commit_str=None):
         if len(feature_dataframe.head(1)) == 0:
             raise exceptions.FeatureStoreException(
                 "There is no data in the entity that you are trying to compute "
