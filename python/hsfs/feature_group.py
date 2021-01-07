@@ -19,6 +19,7 @@ import json
 import warnings
 import pandas as pd
 import numpy as np
+import datetime
 from typing import Optional, Union, Any, Dict, List, TypeVar
 
 from hsfs import util, engine, feature, storage_connector as sc
@@ -542,7 +543,10 @@ class FeatureGroup(FeatureGroupBase):
         user_version = self._version
         self._feature_group_engine.save(self, feature_dataframe, write_options)
         if self.statistics_config.enabled:
-            self._statistics_engine.compute_statistics(self, feature_dataframe)
+            commit_date = self._get_latest_commit_date()
+            self._statistics_engine.compute_statistics(
+                self, feature_dataframe, commit_date
+            )
         if user_version is None:
             warnings.warn(
                 "No version provided for creating feature group `{}`, incremented version to `{}`.".format(
@@ -662,7 +666,10 @@ class FeatureGroup(FeatureGroupBase):
             `RestAPIError`. Unable to persist the statistics.
         """
         if self.statistics_config.enabled:
-            return self._statistics_engine.compute_statistics(self, self.read())
+            commit_date = self._get_latest_commit_date()
+            return self._statistics_engine.compute_statistics(
+                self, self.read(), commit_date
+            )
         else:
             warnings.warn(
                 (
@@ -706,6 +713,16 @@ class FeatureGroup(FeatureGroupBase):
             )
         self._feature_group_engine.append_features(self, new_features)
         return self
+
+    def _get_latest_commit_date(self):
+        if self.time_travel_format == "HUDI":
+            last_commit_details = list(
+                feature_group_engine.commit_details(self, 1).values()
+            )[0]
+            commit_str = last_commit_details.get("committedOn")
+        else:
+            commit_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        return commit_str
 
     @classmethod
     def from_response_json(cls, json_dict):
@@ -931,7 +948,8 @@ class OnDemandFeatureGroup(FeatureGroupBase):
         self._feature_group_engine.save(self)
 
         if self.statistics_config.enabled:
-            self._statistics_engine.compute_statistics(self, self.read())
+            commit_date = self._get_latest_commit_date()
+            self._statistics_engine.compute_statistics(self, self.read(), commit_date)
 
     def read(self, dataframe_type="default"):
         """Get the feature group as a DataFrame."""
