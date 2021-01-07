@@ -230,7 +230,10 @@ class FeatureGroupBase:
             `RestAPIError`. Unable to persist the statistics.
         """
         if self.statistics_config.enabled:
-            return self._statistics_engine.compute_statistics(self, self.read())
+            commit_date = self._get_latest_commit_date()
+            return self._statistics_engine.compute_statistics(
+                self, self.read(), commit_date
+            )
         else:
             warnings.warn(
                 (
