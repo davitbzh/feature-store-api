@@ -617,7 +617,8 @@ class FeatureGroup(FeatureGroupBase):
             write_options,
         )
 
-        self.compute_statistics()
+        if self.statistics_config.enabled:
+            self._statistics_engine.compute_statistics(self, self.read())
 
     def commit_details(self, limit: Optional[int] = None):
         """Retrieves commit timeline for this feature group.
