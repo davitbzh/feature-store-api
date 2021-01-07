@@ -717,7 +717,7 @@ class FeatureGroup(FeatureGroupBase):
     def _get_latest_commit_date(self):
         if self.time_travel_format == "HUDI":
             last_commit_details = list(
-                feature_group_engine.commit_details(self, 1).values()
+                self._feature_group_engine.commit_details(self, 1).values()
             )[0]
             commit_str = last_commit_details.get("committedOn")
         else:
