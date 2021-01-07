@@ -541,17 +541,8 @@ class FeatureGroup(FeatureGroupBase):
 
         user_version = self._version
         self._feature_group_engine.save(self, feature_dataframe, write_options)
-        if self._time_travel_format == "HUDI":
-            last_commit_details = list(
-                self._feature_group_engine.commit_details(self, 1).values()
-            )[0]
-            commit_str = last_commit_details.get("committedOn")
-        else:
-            commit_str = None
         if self.statistics_config.enabled:
-            self._statistics_engine.compute_statistics(
-                self, feature_dataframe, commit_str
-            )
+            self._statistics_engine.compute_statistics(self, feature_dataframe)
         if user_version is None:
             warnings.warn(
                 "No version provided for creating feature group `{}`, incremented version to `{}`.".format(
@@ -625,6 +616,7 @@ class FeatureGroup(FeatureGroupBase):
             storage.lower() if storage is not None else None,
             write_options,
         )
+
         self.compute_statistics()
 
     def commit_details(self, limit: Optional[int] = None):
