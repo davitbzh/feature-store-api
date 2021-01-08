@@ -14,6 +14,8 @@
 #   limitations under the License.
 #
 
+import datetime
+
 from hsfs import engine, statistics
 from hsfs.core import statistics_api
 from hsfs.client import exceptions
@@ -25,7 +27,9 @@ class StatisticsEngine:
             feature_store_id, entity_type
         )
 
-    def compute_statistics(self, metadata_instance, feature_dataframe, commit_str=None):
+    def compute_statistics(
+        self, metadata_instance, feature_dataframe, commit_time=None
+    ):
         if len(feature_dataframe.head(1)) == 0:
             raise exceptions.FeatureStoreException(
                 "There is no data in the entity that you are trying to compute "
@@ -38,7 +42,9 @@ class StatisticsEngine:
             metadata_instance.statistics_config.correlations,
             metadata_instance.statistics_config.histograms,
         )
-        stats = statistics.Statistics(commit_str, content_str)
+        if commit_time is None:
+            commit_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        stats = statistics.Statistics(commit_time, content_str)
         self._statistics_api.post(metadata_instance, stats)
         return stats
 

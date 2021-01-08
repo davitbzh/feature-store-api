@@ -19,7 +19,6 @@ import json
 import warnings
 import pandas as pd
 import numpy as np
-import datetime
 from typing import Optional, Union, Any, Dict, List, TypeVar
 
 from hsfs import util, engine, feature, storage_connector as sc
@@ -219,7 +218,7 @@ class FeatureGroupBase:
                 f"'FeatureGroup' object has no feature called '{name}'."
             )
 
-    def compute_statistics(self):
+    def compute_statistics(self, commit_time=None):
         """Recompute the statistics for the feature group and save them to the
         feature store.
         Statistics are only computed for data in the offline storage of the feature
@@ -230,9 +229,8 @@ class FeatureGroupBase:
             `RestAPIError`. Unable to persist the statistics.
         """
         if self.statistics_config.enabled:
-            commit_date = self._get_latest_commit_date()
             return self._statistics_engine.compute_statistics(
-                self, self.read(), commit_date
+                self, self.read(), commit_time
             )
         else:
             warnings.warn(
@@ -567,9 +565,9 @@ class FeatureGroup(FeatureGroupBase):
         user_version = self._version
         self._feature_group_engine.save(self, feature_dataframe, write_options)
         if self.statistics_config.enabled:
-            commit_date = self._get_latest_commit_date()
+            commit_time = self._get_latest_commit_time()
             self._statistics_engine.compute_statistics(
-                self, feature_dataframe, commit_date
+                self, feature_dataframe, commit_time
             )
         if user_version is None:
             warnings.warn(
@@ -644,8 +642,8 @@ class FeatureGroup(FeatureGroupBase):
             storage.lower() if storage is not None else None,
             write_options,
         )
-
-        self.compute_statistics()
+        commit_time = self._get_latest_commit_time()
+        self.compute_statistics(commit_time)
 
     def commit_details(self, limit: Optional[int] = None):
         """Retrieves commit timeline for this feature group.
@@ -714,14 +712,14 @@ class FeatureGroup(FeatureGroupBase):
         self._feature_group_engine.append_features(self, new_features)
         return self
 
-    def _get_latest_commit_date(self):
+    def _get_latest_commit_time(self):
         if self.time_travel_format == "HUDI":
             last_commit_details = list(
                 self._feature_group_engine.commit_details(self, 1).values()
             )[0]
             commit_str = last_commit_details.get("committedOn")
         else:
-            commit_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            commit_str = None
         return commit_str
 
     @classmethod
@@ -948,8 +946,8 @@ class OnDemandFeatureGroup(FeatureGroupBase):
         self._feature_group_engine.save(self)
 
         if self.statistics_config.enabled:
-            commit_date = self._get_latest_commit_date()
-            self._statistics_engine.compute_statistics(self, self.read(), commit_date)
+            commit_time = self._get_latest_commit_time()
+            self._statistics_engine.compute_statistics(self, self.read(), commit_time)
 
     def read(self, dataframe_type="default"):
         """Get the feature group as a DataFrame."""
