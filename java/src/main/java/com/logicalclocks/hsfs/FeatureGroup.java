@@ -188,6 +188,9 @@ public class FeatureGroup extends FeatureGroupBase {
       String commitTime = this.timeTravelFormat == TimeTravelFormat.HUDI
           ? lastestCommitMetaData.get(lastestCommitMetaData.keySet().toArray()[0]).get("CommittedOn")
           : null;
+      System.out.println("----------------");
+      System.out.println(commitTime);
+      System.out.println("----------------");
       statisticsEngine.computeStatistics(this, featureData, commitTime);
     }
   }
