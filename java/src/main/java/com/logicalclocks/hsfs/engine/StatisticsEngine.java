@@ -63,6 +63,9 @@ public class StatisticsEngine {
     if (commitTime == null) {
       commitTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
     }
+    System.out.println("-------222222---------");
+    System.out.println(commitTime);
+    System.out.println("----------------");
     String content = SparkEngine.getInstance().profile(dataFrame, statisticColumns, histograms, correlations);
     return new Statistics(commitTime, content);
   }
