@@ -60,12 +60,6 @@ public class StatisticsEngine {
       throw new FeatureStoreException("There is no data in the entity that you are trying to compute statistics for. A "
           + "possible cause might be that you inserted only data to the online storage of a feature group.");
     }
-    if (commitTime == null) {
-      commitTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-    }
-    System.out.println("-------222222---------");
-    System.out.println(commitTime);
-    System.out.println("----------------");
     String content = SparkEngine.getInstance().profile(dataFrame, statisticColumns, histograms, correlations);
     return new Statistics(commitTime, content);
   }
