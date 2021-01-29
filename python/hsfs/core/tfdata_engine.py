@@ -61,7 +61,7 @@ class TFDataEngine:
         feature_names,
         var_len_features,
         is_training,
-        cycle_length,
+        options,
     ):
 
         self._training_dataset = training_dataset
@@ -70,7 +70,18 @@ class TFDataEngine:
         self._feature_names = feature_names
         self._var_len_features = var_len_features
         self._is_training = is_training
-        self._cycle_length = cycle_length
+
+        self._cycle_length = options["cycle_length"] if "cycle_length" in options else 2
+        self._num_parallel_calls = (
+            options["num_parallel_calls"]
+            if "cycle_length" in options
+            else tf.data.experimental.AUTOTUNE
+        )
+        self._prefetch_size = (
+            options["prefetch_size"]
+            if "cycle_length" in options
+            else tf.data.experimental.AUTOTUNE
+        )
 
         self._features = training_dataset.schema
         self._training_dataset_format = self._training_dataset.data_format
@@ -92,7 +103,7 @@ class TFDataEngine:
         returns schema for parsing serialized example of tfrecord files
         """
         _, tfrecord_feature_description = self._get_tf_dataset(
-            self._input_files, self._cycle_length
+            self._input_files, self._cycle_length, self._num_parallel_calls
         )
         return tfrecord_feature_description
 
@@ -187,16 +198,16 @@ class TFDataEngine:
 
         dataset = dataset.map(
             lambda value: _de_serialize(value),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            num_parallel_calls=self._num_parallel_calls,
         )
 
         if process:
             dataset = dataset.map(
                 lambda value: _process_example(value),
-                num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                num_parallel_calls=self._num_parallel_calls,
             )
             dataset = self._optimize_dataset(
-                dataset, batch_size, num_epochs, self._is_training
+                dataset, batch_size, num_epochs, self._is_training, self._prefetch_size
             )
 
         return dataset
@@ -296,18 +307,22 @@ class TFDataEngine:
         if process:
             csv_dataset = csv_dataset.map(lambda *value: _process_csv_dataset(value))
             csv_dataset = self._optimize_dataset(
-                csv_dataset, batch_size, num_epochs, self._is_training
+                csv_dataset,
+                batch_size,
+                num_epochs,
+                self._is_training,
+                self._prefetch_size,
             )
         return csv_dataset
 
     @staticmethod
-    def _optimize_dataset(dataset, batch_size, num_epochs, is_training):
+    def _optimize_dataset(dataset, batch_size, num_epochs, is_training, prefetch_size):
         if is_training:
             dataset = dataset.shuffle(num_epochs * batch_size)
             dataset = dataset.repeat(num_epochs * batch_size)
         dataset = dataset.cache()
         dataset = dataset.batch(batch_size, drop_remainder=True)
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        dataset = dataset.prefetch(prefetch_size)
 
         return dataset
 
@@ -365,13 +380,15 @@ class TFDataEngine:
 
         return k, feature_type
 
-    def _get_tf_dataset(self, input_files, cycle_length):
+    def _get_tf_dataset(self, input_files, cycle_length, num_parallel_calls):
         dataset = tf.data.Dataset.from_tensor_slices(input_files)
 
         dataset = dataset.interleave(
             tf.data.TFRecordDataset,
             cycle_length=cycle_length,
-            num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+            if num_parallel_calls is None
+            else num_parallel_calls,
         )
 
         tfrecord_feature_description = self._create_tfrecord_feature_description(

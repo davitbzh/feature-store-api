@@ -227,7 +227,7 @@ class TrainingDataset:
         feature_names: Optional[list] = None,
         var_len_features: Optional[list] = [],
         is_training: Optional[bool] = True,
-        cycle_length: Optional[int] = 2,
+        options: Optional[Dict[str, Any]] = {},
     ):
         """
         Returns an object with utility methods to read training dataset as `tf.data.Dataset` object and handle it for further processing.
@@ -239,7 +239,7 @@ class TrainingDataset:
             feature_names: Names of training variables, defaults to `None`.
             var_len_features: Feature names that have variable length and need to be returned as `tf.io.VarLenFeature`, defaults to `[]`.
             is_training: Whether it is for training, testing or validation. Defaults to `True`.
-            cycle_length: Number of files to be read and deserialized in parallel, defaults to `2`.
+            options: ..., defaults to `{}`.
 
         # Returns
             `TFDataEngine`. An object with utility methods to generate and handle `tf.data.Dataset` object.
@@ -251,7 +251,7 @@ class TrainingDataset:
             feature_names=feature_names,
             var_len_features=var_len_features,
             is_training=is_training,
-            cycle_length=cycle_length,
+            options=options,
         )
 
     def show(self, n: int, split: str = None):
