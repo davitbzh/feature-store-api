@@ -210,6 +210,6 @@ class TrainingDatasetEngine:
         with hdfs.open(pickled_function_path, "wb") as pickled_file:
             cloudpickle.dump(func, pickled_file)
 
-        picke_string = cloudpickle.dumps(func)
+        picke_string = dill.dumps(func)
         y = dill.loads(picke_string)
-        return dill.source.getsource(dill.detect.code(y))
+        print(dill.source.getsource(dill.detect.code(y)))
