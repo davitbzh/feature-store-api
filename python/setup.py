@@ -24,6 +24,8 @@ setup(
         "numpy",
         "pyjks",
         "mock",
+        "dill",
+
     ],
     extras_require={
         "dev": [

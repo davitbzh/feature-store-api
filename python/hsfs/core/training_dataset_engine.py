@@ -16,6 +16,15 @@
 
 import re
 from sqlalchemy import sql
+import mock
+
+import dill
+import cloudpickle
+
+try:
+    from pydoop import hdfs
+except ImportError:
+    hdfs = mock.Mock()
 
 from hsfs import engine, training_dataset_feature, util
 from hsfs.core import training_dataset_api, tags_api, storage_connector_api
@@ -195,3 +204,12 @@ class TrainingDatasetEngine:
         training_dataset.prepared_statement_connection = jdbc_connection
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
+
+    def pickle_function(self, func, path):
+        pickled_function_path = hdfs.path.abspath(path)
+        with hdfs.open(pickled_function_path, "wb") as pickled_file:
+            cloudpickle.dump(func, pickled_file)
+
+        picke_string = cloudpickle.dumps(func)
+        y = dill.loads(picke_string)
+        return dill.source.getsource(dill.detect.code(y))
