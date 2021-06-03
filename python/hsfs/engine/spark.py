@@ -315,42 +315,6 @@ class Engine:
 
         dataset = self.convert_to_default_dataframe(dataset)
 
-        # generate transformation function expressions
-        transformed_feature_names = []
-        transformation_fn_expressions = []
-        for (
-            feature_name,
-            transformation_fn,
-        ) in training_dataset.transformation_functions.items():
-            fn_registration_name = (
-                transformation_fn.name + "_" + str(transformation_fn.version)
-            )
-            self._spark_session.udf.register(
-                fn_registration_name, transformation_fn.transformation_fn
-            )
-            transformation_fn_expressions.append(
-                "{fn_name:}({name:}) AS {name:}".format(
-                    fn_name=fn_registration_name, name=feature_name
-                )
-            )
-            transformed_feature_names.append(feature_name)
-
-        # generate non transformation expressions
-        no_transformation_expr = [
-            "{name:} AS {name:}".format(name=col_name)
-            for col_name in dataset.columns
-            if col_name not in transformed_feature_names
-        ]
-
-        # generate entire expression and execute it
-        transformation_fn_expressions.extend(no_transformation_expr)
-        dataset = dataset.selectExpr(*transformation_fn_expressions)
-
-        # sort feature order if it was altered by transformation functions
-        sorded_features = sorted(training_dataset._features, key=lambda ft: ft.index)
-        sorted_feature_names = [ft.name for ft in sorded_features]
-        dataset = dataset.select(*sorted_feature_names)
-
         if training_dataset.coalesce:
             dataset = dataset.coalesce(1)
 
@@ -359,7 +323,30 @@ class Engine:
             training_dataset.data_format, user_write_options
         )
 
+        # check if there any transformation functions that require statistics attached to td features
+        inbuilt_tffn_features = [
+            ft_name
+            for ft_name in training_dataset.transformation_functions
+            if training_dataset._transformation_function_engine.is_inbuilt(
+                training_dataset.transformation_functions[ft_name]
+            )
+        ]
+
         if len(training_dataset.splits) == 0:
+            if inbuilt_tffn_features:
+                # compute statistics before transformations are applied
+                stats = training_dataset._statistics_engine.compute_transformation_fn_statistics(
+                    td_metadata_instance=training_dataset,
+                    columns=inbuilt_tffn_features,
+                    feature_dataframe=dataset,
+                )
+                # Populate inbuilt transformations (if any) with respective arguments
+                training_dataset._transformation_function_engine.populate_inbuilt_attached_fns(
+                    training_dataset.transformation_functions, stats.content
+                )
+            # apply transformation functions (they are applied separately if there are splits)
+            dataset = self._apply_transformation_function(training_dataset, dataset)
+
             path = training_dataset.location + "/" + training_dataset.name
             self._write_training_dataset_single(
                 dataset,
@@ -373,6 +360,7 @@ class Engine:
             split_names = sorted([*training_dataset.splits])
             split_weights = [training_dataset.splits[i] for i in split_names]
             self._write_training_dataset_splits(
+                training_dataset,
                 dataset.randomSplit(split_weights, training_dataset.seed),
                 training_dataset.storage_connector,
                 training_dataset.data_format,
@@ -380,10 +368,12 @@ class Engine:
                 save_mode,
                 training_dataset.location,
                 split_names,
+                inbuilt_tffn_features=inbuilt_tffn_features,
             )
 
     def _write_training_dataset_splits(
         self,
+        training_dataset,
         feature_dataframe_list,
         storage_connector,
         data_format,
@@ -391,11 +381,36 @@ class Engine:
         save_mode,
         path,
         split_names,
+        inbuilt_tffn_features,
     ):
-        for i in range(len(feature_dataframe_list)):
+        if inbuilt_tffn_features:
+            # compute statistics before transformations are applied
+            stats = training_dataset._statistics_engine.compute_transformation_fn_statistics(
+                td_metadata_instance=training_dataset,
+                columns=inbuilt_tffn_features,
+                feature_dataframe_list=feature_dataframe_list,
+                split_names=split_names,
+            )
+            split_statistics = stats.split_statistics
+            for i in range(len(feature_dataframe_list)):
+                # Populate inbuilt transformations (if any) with respective arguments for each split
+                if split_statistics:
+                    stats_content = [
+                        split_stat.content
+                        for split_stat in split_statistics
+                        if split_stat.name == split_names[i]
+                    ][0]
+                    training_dataset._transformation_function_engine.populate_inbuilt_attached_fns(
+                        training_dataset.transformation_functions, stats_content
+                    )
+                # apply transformation functions (they are applied separately to each split)
+                dataset = self._apply_transformation_function(
+                    training_dataset, dataset=feature_dataframe_list[i]
+                )
+
             split_path = path + "/" + str(split_names[i])
             self._write_training_dataset_single(
-                feature_dataframe_list[i],
+                dataset,
                 storage_connector,
                 data_format,
                 write_options,
@@ -818,6 +833,44 @@ class Engine:
                 )
             raise
         return Column(jc)
+
+    def _apply_transformation_function(self, training_dataset, dataset):
+        # generate transformation function expressions
+        transformed_feature_names = []
+        transformation_fn_expressions = []
+        for (
+            feature_name,
+            transformation_fn,
+        ) in training_dataset.transformation_functions.items():
+            fn_registration_name = (
+                transformation_fn.name + "_" + str(transformation_fn.version)
+            )
+            self._spark_session.udf.register(
+                fn_registration_name, transformation_fn.transformation_fn
+            )
+            transformation_fn_expressions.append(
+                "{fn_name:}({name:}) AS {name:}".format(
+                    fn_name=fn_registration_name, name=feature_name
+                )
+            )
+            transformed_feature_names.append(feature_name)
+
+        # generate non transformation expressions
+        no_transformation_expr = [
+            "{name:} AS {name:}".format(name=col_name)
+            for col_name in dataset.columns
+            if col_name not in transformed_feature_names
+        ]
+
+        # generate entire expression and execute it
+        transformation_fn_expressions.extend(no_transformation_expr)
+        dataset = dataset.selectExpr(*transformation_fn_expressions)
+
+        # sort feature order if it was altered by transformation functions
+        sorded_features = sorted(training_dataset._features, key=lambda ft: ft.index)
+        sorted_feature_names = [ft.name for ft in sorded_features]
+        dataset = dataset.select(*sorted_feature_names)
+        return dataset
 
 
 class SchemaError(Exception):

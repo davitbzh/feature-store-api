@@ -29,6 +29,7 @@ class TransformationFunction:
         version=None,
         name=None,
         source_code_content=None,
+        inbuilt_source_code=None,
         output_type=None,
         id=None,
         type=None,
@@ -57,10 +58,24 @@ class TransformationFunction:
             self._output_type = self._transformation_function_engine.infer_spark_type(
                 output_type
             )
+        elif inbuilt_source_code is not None:
+            # user triggered to register inbuilt transformation function
+            self._output_type = self._transformation_function_engine.infer_spark_type(
+                output_type
+            )
+            self._source_code_content = json.dumps(
+                {
+                    "module_imports": "",
+                    "transformer_code": inbuilt_source_code,
+                }
+            )
         else:
             # load original source code
             self._output_type = output_type
             self._load_source_code(self._source_code_content)
+
+        self._feature_group_feature_name = None
+        self._feature_group_id = None
 
     def save(self):
         """Persist transformation function in backend."""

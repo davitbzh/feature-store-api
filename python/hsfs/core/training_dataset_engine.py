@@ -250,6 +250,30 @@ class TrainingDatasetEngine:
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
 
+    def _get_transformation_fns(self, training_dataset):
+        # get attached transformation functions
+        transformation_functions = training_dataset.transformation_functions
+
+        # if there are any inbuilt transformation functions get related statistics and populate with relevant arguments
+        td_tffn_stats = training_dataset._statistics_engine.get_last(
+            training_dataset, for_transformation=True
+        )
+        if td_tffn_stats.content is not None:
+            stats_content = td_tffn_stats.content
+        else:
+            # TODO: how do we know if user called or used "train" split for training?
+            stats_content = [
+                split_stat.content
+                for split_stat in td_tffn_stats.split_statistics
+                if split_stat.name == "train"
+            ][0]
+        transformation_fns = (
+            self._transformation_function_engine.populate_inbuilt_attached_fns(
+                transformation_functions, stats_content
+            )
+        )
+        return transformation_fns
+
     @staticmethod
     def _apply_transformation(transformation_fns, row_dict):
         for feature_name in transformation_fns:
