@@ -15,18 +15,39 @@
 #
 import numpy
 import datetime
+from functools import partial
 
-from hsfs import training_dataset_feature
-from hsfs.core import transformation_function_api
+from hsfs import training_dataset, training_dataset_feature, transformation_function
+from hsfs.core import transformation_function_api, statistics_api
+from hsfs.client.exceptions import RestAPIError
+from hsfs.core.inbuilt_transformation_function import InBuiltTransformationFunction
 
 
 class TransformationFunctionEngine:
+    INBUILT_FN_NAMES = [
+        "min_max_scaler",
+        "standard_scaler",
+        "robust_scaler",
+        "label_encoder",
+    ]
+
     def __init__(self, feature_store_id):
+        self._feature_store_id = feature_store_id
         self._transformation_function_api = (
             transformation_function_api.TransformationFunctionApi(feature_store_id)
         )
+        self._statistics_api = statistics_api.StatisticsApi(
+            feature_store_id, training_dataset.TrainingDataset.ENTITY_TYPE
+        )
 
     def save(self, transformation_fn_instance):
+        if self.is_inbuilt(transformation_fn_instance):
+            raise ValueError(
+                "Transformation function name '{name:}' with version 1 is reserved for inbuilt hsfs "
+                "functions. Please use other name or version".format(
+                    name=transformation_fn_instance.name
+                )
+            )
         if not callable(transformation_fn_instance.transformation_fn):
             raise ValueError("transformer must be callable")
         self._transformation_function_api.register_transformation_fn(
@@ -70,13 +91,114 @@ class TransformationFunctionEngine:
                 feature_name,
                 transformation_fn,
             ) in training_dataset._transformation_functions.items():
+                if feature_name in training_dataset.label:
+                    raise ValueError(
+                        "Online transformations for training dataset labels are not supported."
+                    )
                 training_dataset._features.append(
                     training_dataset_feature.TrainingDatasetFeature(
                         name=feature_name,
+                        type=transformation_fn.output_type,
                         label=False,
                         transformation_function=transformation_fn,
                     )
                 )
+
+    def register_inbuilt_transformation_fns(self):
+        for name in self.INBUILT_FN_NAMES:
+            try:
+                self._transformation_function_api.get_transformation_fn(name, 1)[0]
+            except RestAPIError as e:
+                if (
+                    e.response.json().get("errorMsg")
+                    == "Transformation function does not exist"
+                ):
+                    inbuilt_fn = InBuiltTransformationFunction(name)
+                    (
+                        inbuilt_source_code,
+                        output_type,
+                    ) = inbuilt_fn.generate_source_code()
+                    transformation_fn_instance = (
+                        transformation_function.TransformationFunction(
+                            featurestore_id=self._feature_store_id,
+                            name=name,
+                            version=1,
+                            output_type=output_type,
+                            inbuilt_source_code=inbuilt_source_code,
+                        )
+                    )
+                    self._transformation_function_api.register_transformation_fn(
+                        transformation_fn_instance
+                    )
+                elif (
+                    e.response.json().get("errorMsg")
+                    == "The provided transformation function name and version already exists"
+                ):
+                    Warning(e.response.json().get("errorMsg"))
+
+    def is_inbuilt(self, transformation_fn_instance):
+        if (
+            transformation_fn_instance.name in self.INBUILT_FN_NAMES
+            and transformation_fn_instance.version == 1
+        ):
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def populate_inbuilt_fn_arguments(
+        feature_name, transformation_function_instance, stat_content
+    ):
+        if transformation_function_instance.name == "min_max_scaler":
+            min_value, max_value = InBuiltTransformationFunction.min_max_scaler_stats(
+                stat_content, feature_name
+            )
+            transformation_function_instance.transformation_fn = partial(
+                transformation_function_instance.transformation_fn,
+                min_value=min_value,
+                max_value=max_value,
+            )
+        elif transformation_function_instance.name == "standard_scaler":
+            mean, std_dev = InBuiltTransformationFunction.standard_scaler_stats(
+                stat_content, feature_name
+            )
+            transformation_function_instance.transformation_fn = partial(
+                transformation_function_instance.transformation_fn,
+                mean=mean,
+                std_dev=std_dev,
+            )
+        elif transformation_function_instance.name == "robust_scaler":
+            robust_scaler_stats = InBuiltTransformationFunction.robust_scaler_stats(
+                stat_content, feature_name
+            )
+            transformation_function_instance.transformation_fn = partial(
+                transformation_function_instance.transformation_fn,
+                p25=robust_scaler_stats[24],
+                p50=robust_scaler_stats[49],
+                p75=robust_scaler_stats[74],
+            )
+        elif transformation_function_instance.name == "label_encoder":
+            value_to_index = InBuiltTransformationFunction.encoder_stats(
+                stat_content, feature_name
+            )
+            transformation_function_instance.transformation_fn = partial(
+                transformation_function_instance.transformation_fn,
+                value_to_index=value_to_index,
+            )
+        else:
+            raise ValueError("Not implemented")
+
+        return transformation_function_instance
+
+    def populate_inbuilt_attached_fns(self, attached_transformation_fns, stat_content):
+        for ft_name in attached_transformation_fns:
+            if self.is_inbuilt(attached_transformation_fns[ft_name]):
+                # check if its inbuilt transformation function and populated with statistics arguments
+                transformation_fn = self.populate_inbuilt_fn_arguments(
+                    ft_name, attached_transformation_fns[ft_name], stat_content
+                )
+                attached_transformation_fns[ft_name] = transformation_fn
+        return attached_transformation_fns
 
     @staticmethod
     def infer_spark_type(output_type):

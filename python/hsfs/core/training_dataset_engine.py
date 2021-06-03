@@ -245,18 +245,24 @@ class TrainingDatasetEngine:
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
 
-    @staticmethod
-    def _get_transformation_fns(training_dataset):
-        transformation_fns = training_dataset.transformation_functions
-        # users may initiate get serving vector within Pyspark application. In this case transformation function will
-        # be decorated with spark udf. However, here we want to apply this function to python type and not
-        # spark dataframe. Reload source code without decorator.
-        if engine.get_type() == "spark":
-            for feature_name in transformation_fns:
-                transformation_fn = transformation_fns[feature_name]
-                transformation_fn._load_source_code(
-                    transformation_fn._source_code_content, False
-                )
+    def _get_transformation_fns(self, training_dataset):
+        td_tffn_stats = training_dataset._statistics_engine.get_last(
+            training_dataset, for_transformation=True
+        )
+        if td_tffn_stats.content is not None:
+            stats_content = td_tffn_stats.content
+        else:
+            # TODO: how do we know if user called or used "train" split for training?
+            stats_content = [
+                split_stat.content
+                for split_stat in td_tffn_stats.split_statistics
+                if split_stat.name == "train"
+            ][0]
+        transformation_fns = (
+            self._transformation_function_engine.populate_inbuilt_attached_fns(
+                training_dataset.transformation_functions, stats_content
+            )
+        )
         return transformation_fns
 
     @staticmethod
