@@ -43,7 +43,7 @@ public class TrainingDatasetApi {
   private static final String TRAINING_QUERY_PATH = TRAINING_DATASETS_PATH + "{/tdId}/query{?withLabel}";
   public static final String TRAINING_DATASET_ID_PATH = TRAINING_DATASETS_PATH + "{/fgId}{?updateStatsConfig,"
       + "updateMetadata}";
-  private static final String PREP_STATEMENT_PATH = TRAINING_DATASETS_PATH + "{/tdId}/preparedstatements";
+  private static final String PREP_STATEMENT_PATH = TRAINING_DATASETS_PATH + "{/tdId}/preparedstatements{?batch}";
   private static final String TRANSFORMATION_FUNCTION_PATH =
       TRAINING_DATASETS_PATH + "{/tdId}/transformationfunctions";
 
@@ -118,7 +118,7 @@ public class TrainingDatasetApi {
     return hopsworksClient.handleRequest(getRequest, FsQuery.class);
   }
 
-  public List<ServingPreparedStatement> getServingPreparedStatement(TrainingDataset trainingDataset)
+  public List<ServingPreparedStatement> getServingPreparedStatement(TrainingDataset trainingDataset, boolean batch)
       throws FeatureStoreException, IOException {
     HopsworksClient hopsworksClient = HopsworksClient.getInstance();
     String pathTemplate = HopsworksClient.PROJECT_PATH
@@ -129,6 +129,7 @@ public class TrainingDatasetApi {
         .set("projectId", trainingDataset.getFeatureStore().getProjectId())
         .set("fsId", trainingDataset.getFeatureStore().getId())
         .set("tdId", trainingDataset.getId())
+        .set("batch", batch)
         .expand();
 
     HttpGet getRequest = new HttpGet(uri);
@@ -183,7 +184,7 @@ public class TrainingDatasetApi {
     hopsworksClient.handleRequest(deleteRequest);
   }
 
-  public TrainingDataset getTransformationFunctions(TrainingDataset trainingDataset)
+  public List<TransformationFunctionAttached> getTransformationFunctions(TrainingDataset trainingDataset)
       throws FeatureStoreException, IOException {
     HopsworksClient hopsworksClient = HopsworksClient.getInstance();
     String pathTemplate = PROJECT_PATH
@@ -197,6 +198,8 @@ public class TrainingDatasetApi {
         .expand();
 
     LOGGER.info("Sending metadata request: " + uri);
-    return hopsworksClient.handleRequest(new HttpGet(uri), TrainingDataset.class);
+    TransformationFunctionAttached transformationFunctionAttached =
+        hopsworksClient.handleRequest(new HttpGet(uri), TransformationFunctionAttached.class);
+    return transformationFunctionAttached.getItems();
   }
 }

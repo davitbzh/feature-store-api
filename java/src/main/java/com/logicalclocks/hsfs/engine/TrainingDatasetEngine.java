@@ -132,7 +132,7 @@ public class TrainingDatasetEngine {
     utils.trainingDatasetSchemaMatch(dataset, trainingDataset.getFeatures());
 
     // check if this training dataset has transformation functions attached and throw exception if any
-    if (getTransformationFunctions(trainingDataset).size() > 0) {
+    if (trainingDatasetApi.getTransformationFunctions(trainingDataset).size() > 0) {
       throw new FeatureStoreException("This training dataset has transformation functions attached and "
           + "insert operation must be performed from a PySpark application");
     }
@@ -184,11 +184,11 @@ public class TrainingDatasetEngine {
     trainingDataset.getStatisticsConfig().setHistograms(apiTD.getStatisticsConfig().getHistograms());
   }
 
-  public void initPreparedStatement(TrainingDataset trainingDataset, boolean external)
+  public void initPreparedStatement(TrainingDataset trainingDataset, boolean batch, boolean external)
       throws FeatureStoreException, IOException, SQLException {
 
     // check if this training dataset has transformation functions attached and throw exception if any
-    if (getTransformationFunctions(trainingDataset).size() > 0) {
+    if (trainingDatasetApi.getTransformationFunctions(trainingDataset).size() > 0) {
       throw new FeatureStoreException("This training dataset has transformation functions attached and "
           + "serving must performed from a Python application");
     }
@@ -208,7 +208,7 @@ public class TrainingDatasetEngine {
     trainingDataset.setPreparedStatementConnection(jdbcConnection);
 
     List<ServingPreparedStatement> servingPreparedStatements =
-        trainingDatasetApi.getServingPreparedStatement(trainingDataset);
+        trainingDatasetApi.getServingPreparedStatement(trainingDataset, batch);
     // map of prepared statement index and its corresponding parameter indices
     Map<Integer, Map<String, Integer>> preparedStatementParameters = new HashMap<>();
     // save map of fg index and its prepared statement
@@ -235,7 +235,7 @@ public class TrainingDatasetEngine {
 
     // init prepared statement if it has not already
     if (trainingDataset.getPreparedStatements() == null) {
-      initPreparedStatement(trainingDataset, external);
+      initPreparedStatement(trainingDataset, false, external);
     }
     //check if primary key map correspond to serving_keys.
     if (!trainingDataset.getServingKeys().equals(entry.keySet())) {
@@ -284,6 +284,63 @@ public class TrainingDatasetEngine {
     return servingVector;
   }
 
+  public List<Object> getBatchServingVector(TrainingDataset trainingDataset, Map<String, List<Object>> entry,
+                                            boolean external) throws SQLException, FeatureStoreException, IOException {
+
+    // init prepared statement if it has not already
+    if (trainingDataset.getPreparedStatements() == null) {
+      initPreparedStatement(trainingDataset, false, external);
+    }
+    //check if primary key map correspond to serving_keys.
+    if (!trainingDataset.getServingKeys().equals(entry.keySet())) {
+      throw new IllegalArgumentException("Provided primary key map doesn't correspond to serving_keys");
+    }
+
+    Map<Integer, Map<String, Integer>> preparedStatementParameters = trainingDataset.getPreparedStatementParameters();
+    TreeMap<Integer, PreparedStatement> preparedStatements = trainingDataset.getPreparedStatements();
+    Map<String, DatumReader<Object>> complexFeatureSchemas = getComplexFeatureSchemas(trainingDataset);
+
+    // Iterate over entry map of preparedStatements and set values to them
+    for (Integer fgId : trainingDataset.getPreparedStatements().keySet()) {
+      Map<String, Integer> parameterIndexInStatement = preparedStatementParameters.get(fgId);
+      for (String name : entry.keySet()) {
+        if (parameterIndexInStatement.containsKey(name)) {
+          preparedStatements.get(fgId).setArray(parameterIndexInStatement.get(name),
+              trainingDataset.getPreparedStatementConnection().createArrayOf("VARCHAR",
+                  entry.get(name).toArray())
+          );
+        }
+      }
+    }
+
+    // construct batch of serving vectors
+    ArrayList<Object> servingVector = new ArrayList<>();
+    for (Integer preparedStatementIndex : preparedStatements.keySet()) {
+      ResultSet results = preparedStatements.get(preparedStatementIndex).executeQuery();
+      // check if results contain any data at all and throw exception if not
+      if (!results.isBeforeFirst()) {
+        throw new FeatureStoreException("No data was retrieved from online feature store using input " + entry);
+      }
+      //Get column count
+      int columnCount = results.getMetaData().getColumnCount();
+      //append results to servingVector
+      while (results.next()) {
+        int index = 1;
+        while (index <= columnCount) {
+          if (complexFeatureSchemas.containsKey(results.getMetaData().getColumnName(index))) {
+            servingVector.add(deserializeComplexFeature(complexFeatureSchemas, results, index));
+          } else {
+            servingVector.add(results.getObject(index));
+          }
+          index++;
+        }
+      }
+      results.close();
+    }
+    trainingDataset.getPreparedStatementConnection().commit();
+    return servingVector;
+  }
+
   private Object deserializeComplexFeature(Map<String, DatumReader<Object>> complexFeatureSchemas, ResultSet results,
       int index) throws SQLException, IOException {
     Decoder decoder = DecoderFactory.get().binaryDecoder(results.getBytes(index), binaryDecoder);
@@ -305,20 +362,5 @@ public class TrainingDatasetEngine {
 
   public void delete(TrainingDataset trainingDataset) throws FeatureStoreException, IOException {
     trainingDatasetApi.delete(trainingDataset);
-  }
-
-  private List<TrainingDatasetFeature> getTransformationFunctions(TrainingDataset trainingDataset)
-      throws FeatureStoreException, IOException {
-    List<TrainingDatasetFeature> featuresWithtransformationFunction = new ArrayList<>();
-
-    TrainingDataset updatedTrainingDataset =
-        trainingDatasetApi.getTransformationFunctions(trainingDataset);
-
-    for (TrainingDatasetFeature trainingDatasetFeature: updatedTrainingDataset.getFeatures()) {
-      if (trainingDatasetFeature.getTransformationFunction() != null) {
-        featuresWithtransformationFunction.add(trainingDatasetFeature);
-      }
-    }
-    return featuresWithtransformationFunction;
   }
 }
