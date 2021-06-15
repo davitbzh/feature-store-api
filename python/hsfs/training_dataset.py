@@ -164,7 +164,8 @@ class TrainingDataset:
         user_version = self._version
         user_stats_config = self._statistics_config
         # td_job is used only if the hive engine is used
-        td_job = self._training_dataset_engine.save(self, features, write_options)
+        training_dataset, td_job = self._training_dataset_engine.save(self, features, write_options)
+        self.storage_connector = training_dataset.storage_connector
         # currently we do not save the training dataset statistics config for training datasets
         self.statistics_config = user_stats_config
         if self.statistics_config.enabled and engine.get_type() == "spark":
