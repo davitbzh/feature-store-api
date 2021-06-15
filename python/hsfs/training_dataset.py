@@ -168,7 +168,7 @@ class TrainingDataset:
         # currently we do not save the training dataset statistics config for training datasets
         self.statistics_config = user_stats_config
         if self.statistics_config.enabled and engine.get_type() == "spark":
-            self._statistics_engine.compute_statistics(self, self.read())
+            self.compute_statistics()
         if user_version is None:
             warnings.warn(
                 "No version provided for creating training dataset `{}`, incremented version to `{}`.".format(
