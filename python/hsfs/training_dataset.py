@@ -33,6 +33,7 @@ from hsfs.core import (
     transformation_function_engine,
 )
 from hsfs.constructor import query
+from hsfs import split_statistics
 
 
 class TrainingDataset:
@@ -248,7 +249,22 @@ class TrainingDataset:
         feature store.
         """
         if self.statistics_config.enabled and engine.get_type() == "spark":
-            return self._statistics_engine.compute_statistics(self, self.read())
+            if self.splits is not None:
+                statistics_of_splits = []
+                for split_name in self.splits:
+                    statistics_of_splits.append(
+                        split_statistics.SplitStatistics(
+                            split_name,
+                            self._statistics_engine.compute_statistics(
+                                self, self.read(split_name)
+                            ),
+                        )
+                    )
+                return self._statistics_engine.register_split_statistics(
+                    self, statistics_of_splits
+                )
+            else:
+                return self._statistics_engine.compute_statistics(self, self.read())
 
     def tf_data(
         self,

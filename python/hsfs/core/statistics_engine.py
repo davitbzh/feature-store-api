@@ -75,6 +75,14 @@ class StatisticsEngine:
             # Hive engine
             engine.get_instance().profile(metadata_instance)
 
+    def register_split_statistics(self, td_metadata_instance, statistics_of_splits):
+        commit_time = int(float(datetime.datetime.now().timestamp()) * 1000)
+        stats = statistics.Statistics(
+            commit_time=commit_time, content=None, split_statistics=statistics_of_splits
+        )
+        self._statistics_api.post(td_metadata_instance, stats)
+        return stats
+
     def get_last(self, metadata_instance):
         """Get the most recent Statistics of an entity."""
         return self._statistics_api.get_last(metadata_instance)

@@ -26,6 +26,7 @@ class Statistics:
         commit_time,
         content,
         feature_group_commit_id=None,
+        split_statistics=None,
         href=None,
         expand=None,
         items=None,
@@ -35,6 +36,7 @@ class Statistics:
         self._commit_time = commit_time
         self._feature_group_commit_id = feature_group_commit_id
         self._content = json.loads(content)
+        self._split_statistics = split_statistics
 
     @classmethod
     def from_response_json(cls, json_dict):
@@ -50,6 +52,7 @@ class Statistics:
             "commitTime": self._commit_time,
             "featureGroupCommitId": self._feature_group_commit_id,
             "content": json.dumps(self._content),
+            "splitStatistics": self._split_statistics,
         }
 
     def json(self):
@@ -66,3 +69,7 @@ class Statistics:
     @property
     def content(self):
         return self._content
+
+    @property
+    def split_statistics(self):
+        return self._split_statistics
