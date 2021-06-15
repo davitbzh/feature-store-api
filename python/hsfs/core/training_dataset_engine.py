@@ -78,11 +78,11 @@ class TrainingDatasetEngine:
                     "Transformation functions can only be applied to training datasets generated from Query object"
                 )
 
-        updated_instance = self._training_dataset_api.post(training_dataset)
+        self._training_dataset_api.post(training_dataset)
         engine.get_instance().write_training_dataset(
             training_dataset, features, user_write_options, self.OVERWRITE
         )
-        return updated_instance
+        return training_dataset
 
     def insert(self, training_dataset, dataset, user_write_options, overwrite):
         return engine.get_instance().write_training_dataset(
