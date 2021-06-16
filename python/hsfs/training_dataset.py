@@ -257,8 +257,8 @@ class TrainingDataset:
                         split_statistics.SplitStatistics(
                             split_name,
                             self._statistics_engine.compute_statistics(
-                                self, self.read(split_name).content
-                            ),
+                                self, self.read(split_name)
+                            ).content,
                         )
                     )
                 return self._statistics_engine.register_split_statistics(
