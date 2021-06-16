@@ -256,9 +256,9 @@ class TrainingDataset:
                     statistics_of_splits.append(
                         split_statistics.SplitStatistics(
                             split_name,
-                            self._statistics_engine.compute_statistics(
+                            self._statistics_engine.profile_statistics(
                                 self, self.read(split_name)
-                            ).content,
+                            ),
                         )
                     )
                 return self._statistics_engine.register_split_statistics(
