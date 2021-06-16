@@ -24,7 +24,10 @@ class SplitStatistics:
     ):
 
         self._name = name
-        self._content = json.loads(content)
+        if not isinstance(content, dict):
+            self._content = json.loads(content)
+        else:
+            self._content = content
 
     @classmethod
     def from_response_json(cls, json_dict):
