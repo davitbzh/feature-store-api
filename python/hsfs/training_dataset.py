@@ -250,7 +250,7 @@ class TrainingDataset:
         feature store.
         """
         if self.statistics_config.enabled and engine.get_type() == "spark":
-            if self.splits is not None:
+            if self.splits:
                 statistics_of_splits = []
                 for split_name in self.splits:
                     statistics_of_splits.append(
