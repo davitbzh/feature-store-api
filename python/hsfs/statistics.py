@@ -35,7 +35,11 @@ class Statistics:
     ):
         self._commit_time = commit_time
         self._feature_group_commit_id = feature_group_commit_id
-        self._content = json.loads(content)
+        # if split_statistics is provided then content will be None
+        if split_statistics is None:
+            self._content = json.loads(content)
+        else:
+            self._content = content
         self._split_statistics = split_statistics
 
     @classmethod
