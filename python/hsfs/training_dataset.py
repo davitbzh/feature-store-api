@@ -597,9 +597,7 @@ class TrainingDataset:
         """
         return self._training_dataset_engine.query(self, online, with_label)
 
-    def init_prepared_statement(
-        self, batch: Optional[bool] = False, external: Optional[bool] = False
-    ):
+    def init_prepared_statement(self, external: Optional[bool] = False):
         """Initialise and cache parametrized prepared statement to
            retrieve feature vector from online feature store.
 
@@ -613,7 +611,7 @@ class TrainingDataset:
                 which relies on the private IP.
         """
         if self.prepared_statements is None:
-            self._training_dataset_engine.init_prepared_statement(self, batch, external)
+            self._training_dataset_engine.init_prepared_statement(self, external)
 
     def get_serving_vector(
         self, entry: Dict[str, Any], external: Optional[bool] = False
@@ -636,13 +634,13 @@ class TrainingDataset:
             self, entry, False, external
         )
 
-    def get_batch_serving_vectors(
-        self, entry: Dict[str, List[Any]], external: Optional[bool] = False
+    def get_serving_vectors(
+        self, entry: List[Dict[str, Any]], external: Optional[bool] = False
     ):
-        """Returns assembled serving vector from online feature store.
+        """Returns assembled serving vectors from online feature store.
 
         # Arguments
-            entry: dictionary of training dataset feature group primary key names as keys and list of values provided by
+            entry: list of dictionaries of training dataset feature group primary key names as keys and values provided by
                 serving application.
             external: boolean, optional. If set to True, the connection to the
                 online feature store is established using the same host as
@@ -653,9 +651,7 @@ class TrainingDataset:
             `List[list]` List of lists of feature values related to provided primary keys, ordered according to
             positions of this features in training dataset query.
         """
-        return self._training_dataset_engine.get_serving_vector(
-            self, entry, True, external
-        )
+        return self._training_dataset_engine.get_serving_vector(self, entry, external)
 
     @property
     def label(self):

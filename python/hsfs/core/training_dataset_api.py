@@ -138,11 +138,10 @@ class TrainingDatasetApi:
             ),
         )
 
-    def get_serving_prepared_statement(self, training_dataset_instance, batch):
+    def get_serving_prepared_statement(self, training_dataset_instance):
         """Get serving prepared statement metadata object for a training dataset.
         Args:
             training_dataset_instance (training_dataset): the metadata instance of the training dataset
-            batch: boolean. Weather to retrieve batch serving vector or not
         """
         _client = client.get_instance()
         path_params = [
@@ -155,9 +154,8 @@ class TrainingDatasetApi:
             "preparedstatements",
         ]
         headers = {"content-type": "application/json"}
-        query_params = {"batch": batch}
         return serving_prepared_statement.ServingPreparedStatement.from_response_json(
-            _client._send_request("GET", path_params, query_params, headers=headers)
+            _client._send_request("GET", path_params, headers=headers)
         )
 
     def delete(self, training_dataset_instance):

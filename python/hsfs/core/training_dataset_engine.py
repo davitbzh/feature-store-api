@@ -16,11 +16,10 @@
 
 import re
 import io
-from itertools import chain
-
 import avro.schema
 import avro.io
-from sqlalchemy import sql, bindparam
+from sqlalchemy import sql
+import multiprocessing as mp
 
 from hsfs import engine, training_dataset_feature, util
 from hsfs.core import (
@@ -154,33 +153,64 @@ class TrainingDatasetEngine:
             row_dict[feature_name] = schema.read(decoder)
         return row_dict
 
-    def get_serving_vector(self, training_dataset, entry, batch, external):
+    def get_serving_vector(self, training_dataset, entry, external):
         """Assembles serving vector from online feature store."""
 
-        if batch:
-            batch_dicts = {}
-        else:
-            serving_vector = []
-
         if training_dataset.prepared_statements is None:
-            self.init_prepared_statement(training_dataset, batch, external)
+            self.init_prepared_statement(training_dataset, external)
 
+        prepared_statements = training_dataset.prepared_statements
+
+        _transaction = training_dataset.prepared_statement_connection.begin()
+        try:
+            executed_statements = self._execute_statements(
+                training_dataset, entry, prepared_statements
+            )
+            _transaction.commit()
+        except Exception:
+            _transaction.rollback()
+            raise Exception(
+                "Transactions to retrieve feature vectors from online feature didn't complete successfully. Rolling back!"
+            )
+
+        serving_vector = self._assemble_feature_vector(
+            training_dataset, entry, executed_statements
+        )
+
+        return serving_vector
+
+    @staticmethod
+    def _execute_statement(training_dataset, entry, prepared_statement):
+        return training_dataset.prepared_statement_connection.execute(
+            prepared_statement, entry
+        )
+
+    def _execute_statements(self, training_dataset, entry, prepared_statements):
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
             raise ValueError(
                 "Provided primary key map doesn't correspond to serving_keys"
             )
+        nprocs = mp.cpu_count()
+        pool = mp.Pool(processes=nprocs)
+        executed_statements = pool.starmap(
+            self._execute_statement,
+            [
+                training_dataset.prepared_statement_connection.execute(
+                    prepared_statements[prepared_statement_index], entry
+                )
+                for prepared_statement_index in prepared_statements
+            ],
+        )
+        return executed_statements
 
-        prepared_statements = training_dataset.prepared_statements
-
+    def _assemble_feature_vector(self, training_dataset, entry, executed_statements):
         # get schemas for complex features once
         complex_features = self.get_complex_feature_schemas(training_dataset)
 
-        for prepared_statement_index in prepared_statements:
-            prepared_statement = prepared_statements[prepared_statement_index]
-            result_proxy = training_dataset.prepared_statement_connection.execute(
-                prepared_statement, entry
-            ).fetchall()
+        serving_vector = []
+        for executed_statement in executed_statements:
+            result_proxy = executed_statement.fetchall()
             result_dict = {}
             for row in result_proxy:
                 result_dict = self.deserialize_complex_features(
@@ -195,37 +225,16 @@ class TrainingDatasetEngine:
                 result_dict = self._apply_transformation(
                     training_dataset.transformation_functions, result_dict
                 )
+            serving_vector += list(result_dict.values())
+        return serving_vector
 
-                # if this is batch serving then create dict object of prepared statement index as key and values as
-                # list of list to later stitch them correctly
-                if batch:
-                    if prepared_statement_index in batch_dicts:
-                        batch_dicts[prepared_statement_index] += [
-                            list(result_dict.values())
-                        ]
-                    else:
-                        batch_dicts[prepared_statement_index] = [
-                            list(result_dict.values())
-                        ]
-
-            if not batch:
-                serving_vector += list(result_dict.values())
-
-        # if this is batch serving then stitch list of lists from each index and return batch of vectors, otherwise
-        # return sigle serving vector
-        if batch:
-            return [
-                list(chain.from_iterable(sublist))
-                for sublist in zip(*list(batch_dicts.values()))
-            ]
-        else:
-            return serving_vector
-
-    def init_prepared_statement(self, training_dataset, batch, external):
+    def init_prepared_statement(self, training_dataset, external):
         online_conn = self._storage_connector_api.get_online_connector()
+        jdbc_engine = util.create_mysql_engine(online_conn, external)
+        jdbc_engine.execution_options(autocommit=False)
         jdbc_connection = util.create_mysql_connection(online_conn, external)
         prepared_statements = self._training_dataset_api.get_serving_prepared_statement(
-            training_dataset, batch
+            training_dataset
         )
 
         prepared_statements_dict = {}
@@ -258,12 +267,6 @@ class TrainingDatasetEngine:
                     query_online,
                 )
             query_online = sql.text(query_online)
-            # in case of batch serving vector bind parameters to the prepared statement.
-            if batch:
-                bind_params = [
-                    bindparam(pk_name, expanding=True) for pk_name in pk_names
-                ]
-                query_online = query_online.bindparams(*bind_params)
             prepared_statements_dict[
                 prepared_statement.prepared_statement_index
             ] = query_online
