@@ -49,6 +49,7 @@ class TrainingDatasetEngine:
                 feature_store_id
             )
         )
+        self.pool = mp.Pool(processes=mp.cpu_count())
 
     def save(self, training_dataset, features, user_write_options):
         if isinstance(features, query.Query):
@@ -170,7 +171,8 @@ class TrainingDatasetEngine:
         except Exception:
             _transaction.rollback()
             raise Exception(
-                "Transactions to retrieve feature vectors from online feature didn't complete successfully. Rolling back!"
+                "Transactions to retrieve feature vectors from online feature didn't complete successfully. "
+                "Rolling back!"
             )
 
         serving_vector = self._assemble_feature_vector(
@@ -179,26 +181,22 @@ class TrainingDatasetEngine:
 
         return serving_vector
 
-    @staticmethod
-    def _execute_statement(training_dataset, entry, prepared_statement):
-        return training_dataset.prepared_statement_connection.execute(
-            prepared_statement, entry
-        )
-
     def _execute_statements(self, training_dataset, entry, prepared_statements):
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
             raise ValueError(
                 "Provided primary key map doesn't correspond to serving_keys"
             )
-        nprocs = mp.cpu_count()
-        pool = mp.Pool(processes=nprocs)
-        executed_statements = pool.starmap(
-            self._execute_statement,
+
+        def _execute_statement(prepared_statement):
+            return training_dataset.prepared_statement_connection.execute(
+                prepared_statement, entry
+            )
+
+        executed_statements = self.pool.map(
+            _execute_statement,
             [
-                training_dataset.prepared_statement_connection.execute(
-                    prepared_statements[prepared_statement_index], entry
-                )
+                prepared_statements[prepared_statement_index]
                 for prepared_statement_index in prepared_statements
             ],
         )
