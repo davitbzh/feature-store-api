@@ -651,7 +651,7 @@ class TrainingDataset:
             `List[list]` List of lists of feature values related to provided primary keys, ordered according to
             positions of this features in training dataset query.
         """
-        return self._training_dataset_engine.get_serving_vector(self, entry, external)
+        return self._training_dataset_engine.get_serving_vectors(self, entry, external)
 
     @property
     def label(self):

@@ -181,6 +181,36 @@ class TrainingDatasetEngine:
 
         return serving_vector
 
+    def get_serving_vectors(self, training_dataset, entries, external):
+        """Assembles batch serving vector from online feature store."""
+
+        if training_dataset.prepared_statements is None:
+            self.init_prepared_statement(training_dataset, external)
+
+        prepared_statements = training_dataset.prepared_statements
+
+        _transaction = training_dataset.prepared_statement_connection.begin()
+        try:
+            batch_executed_statements = [
+                self._execute_statements(training_dataset, entry, prepared_statements)
+                for entry in entries
+            ]
+            _transaction.commit()
+        except Exception:
+            _transaction.rollback()
+            raise Exception(
+                "Transactions to retrieve feature vectors from online feature didn't complete successfully. "
+                "Rolling back!"
+            )
+
+        batch_serving_vector = []
+        for entry, executed_statements in batch_executed_statements, entries:
+            batch_serving_vector += self._assemble_feature_vector(
+                training_dataset, entry, executed_statements
+            )
+
+        return batch_serving_vector
+
     def _execute_statements(self, training_dataset, entry, prepared_statements):
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
