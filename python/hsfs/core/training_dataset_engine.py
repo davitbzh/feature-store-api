@@ -161,17 +161,10 @@ class TrainingDatasetEngine:
         prepared_statements = training_dataset.prepared_statements
 
         _transaction = training_dataset.prepared_statement_connection.begin()
-        try:
-            executed_statements = self._execute_statements(
-                training_dataset, entry, prepared_statements
-            )
-            _transaction.commit()
-        except Exception:
-            _transaction.rollback()
-            raise Exception(
-                "Transactions to retrieve feature vectors from online feature didn't complete successfully. "
-                "Rolling back!"
-            )
+        executed_statements = self._execute_statements(
+            training_dataset, entry, prepared_statements
+        )
+        _transaction.commit()
 
         serving_vector = self._assemble_feature_vector(
             training_dataset, entry, executed_statements
@@ -188,18 +181,11 @@ class TrainingDatasetEngine:
         prepared_statements = training_dataset.prepared_statements
 
         _transaction = training_dataset.prepared_statement_connection.begin()
-        try:
-            batch_executed_statements = [
-                self._execute_statements(training_dataset, entry, prepared_statements)
-                for entry in entries
-            ]
-            _transaction.commit()
-        except Exception:
-            _transaction.rollback()
-            raise Exception(
-                "Transactions to retrieve feature vectors from online feature didn't complete successfully. "
-                "Rolling back!"
-            )
+        batch_executed_statements = [
+            self._execute_statements(training_dataset, entry, prepared_statements)
+            for entry in entries
+        ]
+        _transaction.commit()
 
         batch_serving_vector = []
         for entry, executed_statements in zip(entries, batch_executed_statements):

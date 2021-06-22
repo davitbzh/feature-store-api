@@ -461,18 +461,7 @@ public class TrainingDataset {
   public void initPreparedStatement(boolean external) throws SQLException, IOException, FeatureStoreException {
     // init prepared statement if it has not already
     if (this.getPreparedStatements() == null) {
-      trainingDatasetEngine.initPreparedStatement(this, false, external);
-    }
-  }
-
-  public void initBatchPreparedStatement() throws SQLException, IOException, FeatureStoreException {
-    initBatchPreparedStatement(false);
-  }
-
-  public void initBatchPreparedStatement(boolean external) throws SQLException, IOException, FeatureStoreException {
-    // init prepared statement if it has not already
-    if (this.getPreparedStatements() == null) {
-      trainingDatasetEngine.initPreparedStatement(this, true, external);
+      trainingDatasetEngine.initPreparedStatement(this, external);
     }
   }
 
@@ -506,16 +495,34 @@ public class TrainingDataset {
     return trainingDatasetEngine.getServingVector(this, entry, external);
   }
 
+  /**
+   * Retrieve feature vectors from online feature store.
+   *
+   * @param entry List of Map object with kes as primary key names of the training dataset features groups and values as
+   *              corresponding ids to retrieve feature vector from online feature store.
+   * @throws FeatureStoreException
+   * @throws IOException
+   */
   @JsonIgnore
-  public List<Object> getBatchServingVector(Map<String, List<Object>> entry)
-      throws SQLException, FeatureStoreException, IOException {
-    return getBatchServingVector(entry, false);
+  public List<List<Object>> getServingVectors(List<Map<String, Object>> entry) throws SQLException, FeatureStoreException,
+      IOException {
+    return getServingVectors(entry, false);
   }
 
+  /**
+   * Retrieve feature vectors from online feature store.
+   *
+   * @param entry List of Map object with kes as primary key names of the training dataset features groups and values as
+   *              corresponding ids to retrieve feature vector from online feature store.
+   * @param external If true, the connection to the online feature store will be established using the hostname
+   *                 provided in the hsfs.connection() setup.
+   * @throws FeatureStoreException
+   * @throws IOException
+   */
   @JsonIgnore
-  public List<Object> getBatchServingVector(Map<String, List<Object>> entry, boolean external)
+  public List<List<Object>> getServingVectors(List<Map<String, Object>> entry, boolean external)
       throws SQLException, FeatureStoreException, IOException {
-    return trainingDatasetEngine.getBatchServingVector(this, entry, external);
+    return trainingDatasetEngine.getServingVectors(this, entry, external);
   }
 
   /**

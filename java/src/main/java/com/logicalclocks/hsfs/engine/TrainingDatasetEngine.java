@@ -184,7 +184,7 @@ public class TrainingDatasetEngine {
     trainingDataset.getStatisticsConfig().setHistograms(apiTD.getStatisticsConfig().getHistograms());
   }
 
-  public void initPreparedStatement(TrainingDataset trainingDataset, boolean batch, boolean external)
+  public void initPreparedStatement(TrainingDataset trainingDataset, boolean external)
       throws FeatureStoreException, IOException, SQLException {
 
     // check if this training dataset has transformation functions attached and throw exception if any
@@ -208,7 +208,7 @@ public class TrainingDatasetEngine {
     trainingDataset.setPreparedStatementConnection(jdbcConnection);
 
     List<ServingPreparedStatement> servingPreparedStatements =
-        trainingDatasetApi.getServingPreparedStatement(trainingDataset, batch);
+        trainingDatasetApi.getServingPreparedStatement(trainingDataset);
     // map of prepared statement index and its corresponding parameter indices
     Map<Integer, Map<String, Integer>> preparedStatementParameters = new HashMap<>();
     // save map of fg index and its prepared statement
@@ -235,8 +235,35 @@ public class TrainingDatasetEngine {
 
     // init prepared statement if it has not already
     if (trainingDataset.getPreparedStatements() == null) {
-      initPreparedStatement(trainingDataset, false, external);
+      initPreparedStatement(trainingDataset, external);
     }
+
+    ArrayList<ResultSet> resultSets = executeStatements(trainingDataset, entry);
+    trainingDataset.getPreparedStatementConnection().commit();
+
+    return assembleFeatureVector(trainingDataset, entry, resultSets);
+  }
+
+  public List<List<Object>> getServingVectors(TrainingDataset trainingDataset, List<Map<String, Object>> entries,
+                                        boolean external) throws SQLException, FeatureStoreException, IOException {
+
+    // init prepared statement if it has not already
+    if (trainingDataset.getPreparedStatements() == null) {
+      initPreparedStatement(trainingDataset, external);
+    }
+
+    List<List<Object>> results = new ArrayList<>();
+    for (Map<String, Object> entry: entries) {
+      ArrayList<ResultSet> resultSets = executeStatements(trainingDataset, entry);
+      results.add(assembleFeatureVector(trainingDataset, entry, resultSets));
+    }
+    trainingDataset.getPreparedStatementConnection().commit();
+
+    return results;
+  }
+
+  private ArrayList<ResultSet> executeStatements(TrainingDataset trainingDataset, Map<String, Object> entry)
+      throws SQLException {
     //check if primary key map correspond to serving_keys.
     if (!trainingDataset.getServingKeys().equals(entry.keySet())) {
       throw new IllegalArgumentException("Provided primary key map doesn't correspond to serving_keys");
@@ -244,7 +271,6 @@ public class TrainingDatasetEngine {
 
     Map<Integer, Map<String, Integer>> preparedStatementParameters = trainingDataset.getPreparedStatementParameters();
     TreeMap<Integer, PreparedStatement> preparedStatements = trainingDataset.getPreparedStatements();
-    Map<String, DatumReader<Object>> complexFeatureSchemas = getComplexFeatureSchemas(trainingDataset);
 
     // Iterate over entry map of preparedStatements and set values to them
     for (Integer fgId : preparedStatements.keySet()) {
@@ -256,89 +282,43 @@ public class TrainingDatasetEngine {
       }
     }
 
-    // construct serving vector
-    ArrayList<Object> servingVector = new ArrayList<>();
+    ArrayList<ResultSet> resultSets = new ArrayList<>();
     for (Integer preparedStatementIndex : preparedStatements.keySet()) {
-      ResultSet results = preparedStatements.get(preparedStatementIndex).executeQuery();
-      // check if results contain any data at all and throw exception if not
-      if (!results.isBeforeFirst()) {
-        throw new FeatureStoreException("No data was retrieved from online feature store using input " + entry);
-      }
-      //Get column count
-      int columnCount = results.getMetaData().getColumnCount();
-      //append results to servingVector
-      while (results.next()) {
-        int index = 1;
-        while (index <= columnCount) {
-          if (complexFeatureSchemas.containsKey(results.getMetaData().getColumnName(index))) {
-            servingVector.add(deserializeComplexFeature(complexFeatureSchemas, results, index));
-          } else {
-            servingVector.add(results.getObject(index));
-          }
-          index++;
-        }
-      }
-      results.close();
+      resultSets.add(preparedStatements.get(preparedStatementIndex).executeQuery());
     }
-    trainingDataset.getPreparedStatementConnection().commit();
-    return servingVector;
+    return resultSets;
   }
 
-  public List<Object> getBatchServingVector(TrainingDataset trainingDataset, Map<String, List<Object>> entry,
-                                            boolean external) throws SQLException, FeatureStoreException, IOException {
+  private ArrayList<Object> assembleFeatureVector(TrainingDataset trainingDataset, Map<String, Object> entry,
+                                                  ArrayList<ResultSet> resultSets)
+      throws SQLException, IOException, FeatureStoreException {
 
-    // init prepared statement if it has not already
-    if (trainingDataset.getPreparedStatements() == null) {
-      initPreparedStatement(trainingDataset, false, external);
-    }
-    //check if primary key map correspond to serving_keys.
-    if (!trainingDataset.getServingKeys().equals(entry.keySet())) {
-      throw new IllegalArgumentException("Provided primary key map doesn't correspond to serving_keys");
-    }
-
-    Map<Integer, Map<String, Integer>> preparedStatementParameters = trainingDataset.getPreparedStatementParameters();
-    TreeMap<Integer, PreparedStatement> preparedStatements = trainingDataset.getPreparedStatements();
     Map<String, DatumReader<Object>> complexFeatureSchemas = getComplexFeatureSchemas(trainingDataset);
 
-    // Iterate over entry map of preparedStatements and set values to them
-    for (Integer fgId : trainingDataset.getPreparedStatements().keySet()) {
-      Map<String, Integer> parameterIndexInStatement = preparedStatementParameters.get(fgId);
-      for (String name : entry.keySet()) {
-        if (parameterIndexInStatement.containsKey(name)) {
-          preparedStatements.get(fgId).setArray(parameterIndexInStatement.get(name),
-              trainingDataset.getPreparedStatementConnection().createArrayOf("VARCHAR",
-                  entry.get(name).toArray())
-          );
-        }
-      }
-    }
-
-    // construct batch of serving vectors
-    ArrayList<Object> servingVector = new ArrayList<>();
-    for (Integer preparedStatementIndex : preparedStatements.keySet()) {
-      ResultSet results = preparedStatements.get(preparedStatementIndex).executeQuery();
+    // construct feature vector
+    ArrayList<Object> featureVector = new ArrayList<>();
+    for (ResultSet resultSet : resultSets) {
       // check if results contain any data at all and throw exception if not
-      if (!results.isBeforeFirst()) {
+      if (!resultSet.isBeforeFirst()) {
         throw new FeatureStoreException("No data was retrieved from online feature store using input " + entry);
       }
       //Get column count
-      int columnCount = results.getMetaData().getColumnCount();
+      int columnCount = resultSet.getMetaData().getColumnCount();
       //append results to servingVector
-      while (results.next()) {
+      while (resultSet.next()) {
         int index = 1;
         while (index <= columnCount) {
-          if (complexFeatureSchemas.containsKey(results.getMetaData().getColumnName(index))) {
-            servingVector.add(deserializeComplexFeature(complexFeatureSchemas, results, index));
+          if (complexFeatureSchemas.containsKey(resultSet.getMetaData().getColumnName(index))) {
+            featureVector.add(deserializeComplexFeature(complexFeatureSchemas, resultSet, index));
           } else {
-            servingVector.add(results.getObject(index));
+            featureVector.add(resultSet.getObject(index));
           }
           index++;
         }
       }
-      results.close();
+      resultSet.close();
     }
-    trainingDataset.getPreparedStatementConnection().commit();
-    return servingVector;
+    return featureVector;
   }
 
   private Object deserializeComplexFeature(Map<String, DatumReader<Object>> complexFeatureSchemas, ResultSet results,
