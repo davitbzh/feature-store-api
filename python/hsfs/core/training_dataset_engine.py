@@ -204,8 +204,10 @@ class TrainingDatasetEngine:
 
         batch_serving_vector = []
         for entry, executed_statements in zip(entries, batch_executed_statements):
-            batch_serving_vector += self._assemble_feature_vector(
-                training_dataset, entry, executed_statements
+            batch_serving_vector.append(
+                self._assemble_feature_vector(
+                    training_dataset, entry, executed_statements
+                )
             )
 
         return batch_serving_vector
