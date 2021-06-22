@@ -19,7 +19,6 @@ import io
 import avro.schema
 import avro.io
 from sqlalchemy import sql
-import multiprocessing as mp
 
 from hsfs import engine, training_dataset_feature, util
 from hsfs.core import (
@@ -49,7 +48,7 @@ class TrainingDatasetEngine:
                 feature_store_id
             )
         )
-        self.pool = mp.Pool(processes=mp.cpu_count())
+        # self.pool = mp.Pool(processes=mp.cpu_count())
 
     def save(self, training_dataset, features, user_write_options):
         if isinstance(features, query.Query):
@@ -223,13 +222,18 @@ class TrainingDatasetEngine:
                 prepared_statement, entry
             )
 
-        executed_statements = self.pool.map(
-            _execute_statement,
-            [
-                prepared_statements[prepared_statement_index]
-                for prepared_statement_index in prepared_statements
-            ],
-        )
+        # executed_statements = self.pool.map(
+        #    _execute_statement,
+        #    [
+        #        prepared_statements[prepared_statement_index]
+        #        for prepared_statement_index in prepared_statements
+        #    ],
+        # )
+
+        executed_statements = [
+            _execute_statement(prepared_statements[prepared_statement_index])
+            for prepared_statement_index in prepared_statements
+        ]
         return executed_statements
 
     def _assemble_feature_vector(self, training_dataset, entry, executed_statements):
