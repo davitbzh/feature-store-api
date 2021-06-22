@@ -48,7 +48,6 @@ class TrainingDatasetEngine:
                 feature_store_id
             )
         )
-        # self.pool = mp.Pool(processes=mp.cpu_count())
 
     def save(self, training_dataset, features, user_write_options):
         if isinstance(features, query.Query):
@@ -212,28 +211,18 @@ class TrainingDatasetEngine:
 
         return batch_serving_vector
 
-    def _execute_statements(self, training_dataset, entry, prepared_statements):
+    @staticmethod
+    def _execute_statements(training_dataset, entry, prepared_statements):
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
             raise ValueError(
                 "Provided primary key map doesn't correspond to serving_keys"
             )
 
-        def _execute_statement(prepared_statement):
-            return training_dataset.prepared_statement_connection.execute(
-                prepared_statement, entry
-            )
-
-        # executed_statements = self.pool.map(
-        #    _execute_statement,
-        #    [
-        #        prepared_statements[prepared_statement_index]
-        #        for prepared_statement_index in prepared_statements
-        #    ],
-        # )
-
         executed_statements = [
-            _execute_statement(prepared_statements[prepared_statement_index])
+            training_dataset.prepared_statement_connection.execute(
+                prepared_statements[prepared_statement_index], entry
+            )
             for prepared_statement_index in prepared_statements
         ]
         return executed_statements
