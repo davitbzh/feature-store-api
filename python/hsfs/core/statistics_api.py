@@ -61,8 +61,13 @@ class StatisticsApi:
         headers = {"content-type": "application/json"}
         query_params = {
             "filter_by": "commit_time_eq:" + str(commit_timestamp),
-            "fields": "content",
         }
+        if metadata_instance.ENTITY_TYPE == "featuregroups" or (
+            metadata_instance.ENTITY_TYPE == "trainingdatasets"
+            and not metadata_instance.splits
+        ):
+            query_params["fields"] = "content"
+
         return statistics.Statistics.from_response_json(
             _client._send_request("GET", path_params, query_params, headers=headers)
         )
@@ -84,8 +89,13 @@ class StatisticsApi:
             "sort_by": "commit_time:desc",
             "offset": 0,
             "limit": 1,
-            "fields": "content",
         }
+        if metadata_instance.ENTITY_TYPE == "featuregroups" or (
+            metadata_instance.ENTITY_TYPE == "trainingdatasets"
+            and not metadata_instance.splits
+        ):
+            query_params["fields"] = "content"
+
         return statistics.Statistics.from_response_json(
             _client._send_request("GET", path_params, query_params, headers=headers)
         )
