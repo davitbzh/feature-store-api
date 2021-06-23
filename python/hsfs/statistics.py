@@ -24,7 +24,7 @@ class Statistics:
     def __init__(
         self,
         commit_time,
-        content,
+        content=None,
         feature_group_commit_id=None,
         split_statistics=None,
         href=None,
