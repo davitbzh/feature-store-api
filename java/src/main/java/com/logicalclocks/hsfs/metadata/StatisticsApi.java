@@ -84,33 +84,29 @@ public class StatisticsApi {
 
   public Statistics get(FeatureGroupBase featureGroup, String commitTime) throws FeatureStoreException, IOException {
     return get(featureGroup.getFeatureStore().getProjectId(), featureGroup.getFeatureStore().getId(),
-        featureGroup.getId(), commitTime, false);
+        featureGroup.getId(), commitTime);
   }
 
   public Statistics get(TrainingDataset trainingDataset, String commitTime) throws FeatureStoreException, IOException {
     return get(trainingDataset.getFeatureStore().getProjectId(), trainingDataset.getFeatureStore().getId(),
-        trainingDataset.getId(), commitTime,
-        trainingDataset.getSplits() != null && !trainingDataset.getSplits().isEmpty());
+        trainingDataset.getId(), commitTime);
   }
 
-  private Statistics get(Integer projectId, Integer featurestoreId, Integer entityId, String commitTime, boolean splits)
+  private Statistics get(Integer projectId, Integer featurestoreId, Integer entityId, String commitTime)
       throws FeatureStoreException, IOException {
     HopsworksClient hopsworksClient = getInstance();
     String pathTemplate = PROJECT_PATH
         + FeatureStoreApi.FEATURE_STORE_PATH
         + STATISTICS_PATH;
 
-    UriTemplate uriTemplate = UriTemplate.fromTemplate(pathTemplate)
+    String uri = UriTemplate.fromTemplate(pathTemplate)
         .set("projectId", projectId)
         .set("fsId", featurestoreId)
         .set("entityType", entityType.getValue())
         .set("entityId", entityId)
-        .set("filter_by", "commit_time_eq:" + commitTime);
-
-    if (!splits) {
-      uriTemplate.set("fields", "content");
-    }
-    String uri = uriTemplate.expand();
+        .set("filter_by", "commit_time_eq:" + commitTime)
+        .set("fields", "content")
+        .expand();
 
     LOGGER.info("Sending metadata request: " + uri);
     HttpGet getRequest = new HttpGet(uri);
@@ -125,34 +121,31 @@ public class StatisticsApi {
 
   public Statistics getLast(FeatureGroupBase featureGroup) throws FeatureStoreException, IOException {
     return getLast(featureGroup.getFeatureStore().getProjectId(), featureGroup.getFeatureStore().getId(),
-        featureGroup.getId(), false);
+        featureGroup.getId());
   }
 
   public Statistics getLast(TrainingDataset trainingDataset) throws FeatureStoreException, IOException {
     return getLast(trainingDataset.getFeatureStore().getProjectId(), trainingDataset.getFeatureStore().getId(),
-        trainingDataset.getId(), trainingDataset.getSplits() != null && !trainingDataset.getSplits().isEmpty());
+        trainingDataset.getId());
   }
 
-  private Statistics getLast(Integer projectId, Integer featurestoreId, Integer entityId, boolean splits)
+  private Statistics getLast(Integer projectId, Integer featurestoreId, Integer entityId)
       throws FeatureStoreException, IOException {
     HopsworksClient hopsworksClient = getInstance();
     String pathTemplate = PROJECT_PATH
         + FeatureStoreApi.FEATURE_STORE_PATH
         + STATISTICS_PATH;
 
-    UriTemplate uriTemplate = UriTemplate.fromTemplate(pathTemplate)
+    String uri = UriTemplate.fromTemplate(pathTemplate)
         .set("projectId", projectId)
         .set("fsId", featurestoreId)
         .set("entityType", entityType.getValue())
         .set("entityId", entityId)
         .set("sort_by", "commit_time:desc")
         .set("offset", 0)
-        .set("limit", 1);
-
-    if (!splits) {
-      uriTemplate.set("fields", "content");
-    }
-    String uri = uriTemplate.expand();
+        .set("limit", 1)
+        .set("fields", "content")
+        .expand();
 
     LOGGER.info("Sending metadata request: " + uri);
     HttpGet getRequest = new HttpGet(uri);
