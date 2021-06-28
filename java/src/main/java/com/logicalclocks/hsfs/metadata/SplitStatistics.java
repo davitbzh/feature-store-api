@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-
 package com.logicalclocks.hsfs.metadata;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
