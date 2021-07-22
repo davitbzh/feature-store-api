@@ -388,7 +388,6 @@ class TFDataEngine:
         :return: absolute path of input files
         :rtype: list containing file paths.
         """
-
         if training_dataset_location.startswith("hopsfs"):
             input_files = self._get_hopsfs_dataset_files(
                 training_dataset_location, split
