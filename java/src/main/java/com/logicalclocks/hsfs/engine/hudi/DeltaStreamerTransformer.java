@@ -54,8 +54,9 @@ public class DeltaStreamerTransformer implements Transformer {
     if (featureGroup.getValidationType() != ValidationType.NONE) {
       // TODO (davit): get this validation id after sync completes
       FeatureGroupValidation validation = featureGroup.validate(dataset);
+      props.put("ValidationId", validation.getValidationId());
     }
-
+    props.put("ValidationId", "FFFFFFFFF");
     return utils.sanitizeFeatureNames(dataset);
   }
 }

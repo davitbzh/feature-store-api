@@ -96,5 +96,8 @@ public class DeltaStreamerConfig implements Serializable {
         .getDeltaSyncService();
     deltaSyncService.getDeltaSync().syncOnce();
     deltaSyncService.waitForShutdown();
+    System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    deltaSyncService.getDeltaSync().getProps().get("ValidationId");
+    System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
   }
 }
