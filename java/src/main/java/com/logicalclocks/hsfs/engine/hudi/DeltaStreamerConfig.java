@@ -92,7 +92,7 @@ public class DeltaStreamerConfig implements Serializable {
   public void streamToHoodieTable(Map<String, String> writeOptions, SparkSession spark) throws Exception {
     HoodieDeltaStreamer deltaSync = new HoodieDeltaStreamer(
         deltaStreamerConfig(writeOptions), JavaSparkContext.fromSparkContext(spark.sparkContext()));
-    deltaSync.sync();
+    deltaSync.getDeltaSyncService().getDeltaSync().syncOnce();
     System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
     deltaSync.getDeltaSyncService().getDeltaSync().getProps().get("ValidationId");
     System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
