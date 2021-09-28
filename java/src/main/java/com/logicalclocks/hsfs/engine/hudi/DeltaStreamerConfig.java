@@ -94,9 +94,9 @@ public class DeltaStreamerConfig implements Serializable {
         deltaStreamerConfig(writeOptions), JavaSparkContext.fromSparkContext(spark.sparkContext()))
         .getDeltaSyncService();
     deltaSyncService.getDeltaSync().syncOnce();
-    deltaSyncService.waitForShutdown();
     System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
     deltaSyncService.getDeltaSync().getProps().get("ValidationId");
     System.out.println("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    deltaSyncService.waitForShutdown();
   }
 }
