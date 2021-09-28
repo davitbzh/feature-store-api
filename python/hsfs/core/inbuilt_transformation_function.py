@@ -61,7 +61,7 @@ class InBuiltTransformationFunction:
         max_value = None
         for col in content["columns"]:
             if col["column"] == feature_name:
-                if col["dataType"] in ["Integral", "Fractional", "Decimal"]:
+                if col["dataType"] not in ["Integral", "Fractional", "Decimal"]:
                     raise ValueError("Can't compute min_max_scaler for this type")
                 if "minimum" in col:
                     min_value = col["minimum"]
