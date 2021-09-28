@@ -61,7 +61,7 @@ class InBuiltTransformationFunction:
         max_value = None
         for col in content["columns"]:
             if col["column"] == feature_name:
-                if col["dataType"] in ["String"]:
+                if col["dataType"] in ["Integral", "Fractional", "Decimal"]:
                     raise ValueError("Can't compute min_max_scaler for this type")
                 if "minimum" in col:
                     min_value = col["minimum"]
@@ -91,7 +91,7 @@ class InBuiltTransformationFunction:
         std_dev = None
         for col in content["columns"]:
             if col["column"] == feature_name:
-                if col["dataType"] in ["String"]:
+                if col["dataType"] not in ["Integral", "Fractional", "Decimal"]:
                     raise ValueError("Can't compute standard_scaler for this type")
                 if "mean" in col:
                     mean = col["mean"]
@@ -120,7 +120,7 @@ class InBuiltTransformationFunction:
         percentiles = None
         for col in content["columns"]:
             if col["column"] == feature_name:
-                if col["dataType"] in ["String"]:
+                if col["dataType"] not in ["Integral", "Fractional"]:
                     raise ValueError("Can't compute robust_scaler for this type")
                 print("dataType" in col)
                 if "approxPercentiles" in col and len(col["approxPercentiles"]) > 0:
