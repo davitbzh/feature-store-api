@@ -90,10 +90,7 @@ class StatisticsEngine:
                 "to the online storage of a feature group."
             )
         content_str = engine.get_instance().profile(
-            feature_dataframe,
-            columns,
-            False,
-            True,
+            feature_dataframe, columns, False, True, False
         )
         return content_str
 

@@ -80,6 +80,7 @@ class TrainingDataset:
         self._prepared_statements = None
         self._serving_keys = None
         self._transformation_functions = transformation_functions
+        self._training_split_name = None
 
         self._training_dataset_api = training_dataset_api.TrainingDatasetApi(
             featurestore_id
@@ -712,6 +713,16 @@ class TrainingDataset:
     @serving_keys.setter
     def serving_keys(self, serving_vector_keys):
         self._serving_keys = serving_vector_keys
+
+    @property
+    def training_split_name(self):
+        """Name of training dataset split  that is used for training. This property is used for online transformation
+        functions inside `get_serving_vector` method."""
+        return self._training_split_name
+
+    @training_split_name.setter
+    def training_split_name(self, training_split_name):
+        self._training_split_name = training_split_name
 
     @property
     def transformation_functions(self):

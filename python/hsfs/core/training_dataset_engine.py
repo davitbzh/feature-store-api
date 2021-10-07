@@ -28,6 +28,7 @@ from hsfs.core import (
     transformation_function_engine,
 )
 from hsfs.constructor import query
+from hsfs.client.exceptions import FeatureStoreException
 
 
 class TrainingDatasetEngine:
@@ -198,7 +199,9 @@ class TrainingDatasetEngine:
 
         return serving_vector
 
-    def init_prepared_statement(self, training_dataset, external):
+    def init_prepared_statement(
+        self, training_dataset, external, training_split_name=None
+    ):
         online_conn = self._storage_connector_api.get_online_connector()
         mysql_engine = util.create_mysql_engine(online_conn, external)
         prepared_statements = self._training_dataset_api.get_serving_prepared_statement(
@@ -249,6 +252,7 @@ class TrainingDatasetEngine:
         training_dataset.prepared_statement_engine = mysql_engine
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
+        training_dataset.training_split_name = training_split_name
 
     def _get_transformation_fns(self, training_dataset):
         # get attached transformation functions
@@ -261,11 +265,15 @@ class TrainingDatasetEngine:
         if td_tffn_stats.content is not None:
             stats_content = td_tffn_stats.content
         else:
-            # TODO: how do we know if user called or used "train" split for training?
+            if training_dataset.training_split_name is None:
+                raise FeatureStoreException(
+                    "In `init_prepared_statement` you must provide name of the "
+                    "training dataset split that was used for training. "
+                )
             stats_content = [
                 split_stat.content
                 for split_stat in td_tffn_stats.split_statistics
-                if split_stat.name == "train"
+                if split_stat.name == training_dataset.training_split_name
             ][0]
         transformation_fns = (
             self._transformation_function_engine.populate_inbuilt_attached_fns(

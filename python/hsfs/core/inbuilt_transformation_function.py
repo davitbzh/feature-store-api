@@ -62,7 +62,7 @@ class InBuiltTransformationFunction:
                 if "maximum" in col:
                     max_value = col["maximum"]
 
-        if min_value is None and max_value is None:
+        if min_value is None or max_value is None:
             raise FeatureStoreException(
                 "Feature {feature_name:} doesn't have minimum and/or maximum values computed. Thus can't use "
                 "min_max_scaler method".format(feature_name=feature_name)
@@ -92,7 +92,7 @@ class InBuiltTransformationFunction:
                 if "stdDev" in col:
                     std_dev = col["stdDev"]
 
-        if mean is None and std_dev is None:
+        if mean is None or std_dev is None:
             raise FeatureStoreException(
                 "Feature {feature_name:} doesn't have mean and/or standard deviation computed. Thus can't use "
                 "standard_scaler method".format(feature_name=feature_name)
@@ -114,7 +114,7 @@ class InBuiltTransformationFunction:
         percentiles = None
         for col in content["columns"]:
             if col["column"] == feature_name:
-                if col["dataType"] not in ["Integral", "Fractional"]:
+                if col["dataType"] not in ["Integral", "Fractional", "Decimal"]:
                     raise ValueError("Can't compute robust_scaler for this type")
                 print("dataType" in col)
                 if "approxPercentiles" in col and len(col["approxPercentiles"]) > 0:
