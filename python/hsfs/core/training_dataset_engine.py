@@ -16,6 +16,7 @@
 
 import re
 import io
+import json
 import avro.schema
 import avro.io
 from sqlalchemy import sql
@@ -164,7 +165,9 @@ class TrainingDatasetEngine:
         serving_vector = []
 
         if training_dataset.prepared_statements is None:
-            self.init_prepared_statement(training_dataset, external)
+            self.init_prepared_statement(
+                training_dataset, external, training_dataset.training_split_name
+            )
 
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
@@ -199,9 +202,7 @@ class TrainingDatasetEngine:
 
         return serving_vector
 
-    def init_prepared_statement(
-        self, training_dataset, external, training_split_name=None
-    ):
+    def init_prepared_statement(self, training_dataset, external, training_split_name):
         online_conn = self._storage_connector_api.get_online_connector()
         mysql_engine = util.create_mysql_engine(online_conn, external)
         prepared_statements = self._training_dataset_api.get_serving_prepared_statement(
@@ -242,21 +243,23 @@ class TrainingDatasetEngine:
                 prepared_statement.prepared_statement_index
             ] = query_online
 
-        # attach transformation functions
-        training_dataset.transformation_functions = (
-            self._transformation_function_engine.get_td_transformation_fn(
-                training_dataset
-            )
-        )
-
         training_dataset.prepared_statement_engine = mysql_engine
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
         training_dataset.training_split_name = training_split_name
 
+        # attach transformation functions
+        training_dataset.transformation_functions = (
+            training_dataset.transformation_functions
+        ) = self._get_transformation_fns(training_dataset)
+
     def _get_transformation_fns(self, training_dataset):
         # get attached transformation functions
-        transformation_functions = training_dataset.transformation_functions
+        transformation_functions = (
+            self._transformation_function_engine.get_td_transformation_fn(
+                training_dataset
+            )
+        )
 
         # if there are any inbuilt transformation functions get related statistics and populate with relevant arguments
         td_tffn_stats = training_dataset._statistics_engine.get_last(
@@ -271,10 +274,11 @@ class TrainingDatasetEngine:
                     "training dataset split that was used for training. "
                 )
             stats_content = [
-                split_stat.content
+                split_stat["content"]
                 for split_stat in td_tffn_stats.split_statistics
-                if split_stat.name == training_dataset.training_split_name
+                if split_stat["name"] == training_dataset.training_split_name
             ][0]
+            stats_content = json.loads(stats_content)
         transformation_fns = (
             self._transformation_function_engine.populate_inbuilt_attached_fns(
                 transformation_functions, stats_content

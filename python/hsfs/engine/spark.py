@@ -383,6 +383,7 @@ class Engine:
         split_names,
         inbuilt_tffn_features,
     ):
+        split_statistics = None
         if inbuilt_tffn_features:
             # compute statistics before transformations are applied
             stats = training_dataset._statistics_engine.compute_transformation_fn_statistics(
@@ -392,21 +393,22 @@ class Engine:
                 split_names=split_names,
             )
             split_statistics = stats.split_statistics
-            for i in range(len(feature_dataframe_list)):
-                # Populate inbuilt transformations (if any) with respective arguments for each split
-                if split_statistics:
-                    stats_content = [
-                        split_stat.content
-                        for split_stat in split_statistics
-                        if split_stat.name == split_names[i]
-                    ][0]
-                    training_dataset._transformation_function_engine.populate_inbuilt_attached_fns(
-                        training_dataset.transformation_functions, stats_content
-                    )
-                # apply transformation functions (they are applied separately to each split)
-                dataset = self._apply_transformation_function(
-                    training_dataset, dataset=feature_dataframe_list[i]
+
+        for i in range(len(feature_dataframe_list)):
+            # Populate inbuilt transformations (if any) with respective arguments for each split
+            if split_statistics:
+                stats_content = [
+                    split_stat.content
+                    for split_stat in split_statistics
+                    if split_stat.name == split_names[i]
+                ][0]
+                training_dataset._transformation_function_engine.populate_inbuilt_attached_fns(
+                    training_dataset.transformation_functions, stats_content
                 )
+            # apply transformation functions (they are applied separately to each split)
+            dataset = self._apply_transformation_function(
+                training_dataset, dataset=feature_dataframe_list[i]
+            )
 
             split_path = path + "/" + str(split_names[i])
             self._write_training_dataset_single(

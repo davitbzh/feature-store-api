@@ -636,11 +636,17 @@ class TrainingDataset:
         """
         return self._training_dataset_engine.query(self, online, with_label)
 
-    def init_prepared_statement(self, external: Optional[bool] = False):
+    def init_prepared_statement(
+        self,
+        external: Optional[bool] = False,
+        training_split_name: Optional[str] = None,
+    ):
         """Initialise and cache parametrized prepared statement to
            retrieve feature vector from online feature store.
 
         # Arguments
+            training_split_name: name of training dataset split  that is used for training. This property is used
+                to determine which split statistics to use for  online transformation functions.
             external: boolean, optional. If set to True, the connection to the
                 online feature store is established using the same host as
                 for the `host` parameter in the [`hsfs.connection()`](project.md#connection) method.
@@ -648,7 +654,9 @@ class TrainingDataset:
                 which relies on the private IP.
         """
         if self.prepared_statements is None:
-            self._training_dataset_engine.init_prepared_statement(self, external)
+            self._training_dataset_engine.init_prepared_statement(
+                self, external, training_split_name
+            )
 
     def get_serving_vector(
         self, entry: Dict[str, Any], external: Optional[bool] = False
@@ -716,8 +724,7 @@ class TrainingDataset:
 
     @property
     def training_split_name(self):
-        """Name of training dataset split  that is used for training. This property is used for online transformation
-        functions inside `get_serving_vector` method."""
+        """Set name of training dataset split  that is used for training."""
         return self._training_split_name
 
     @training_split_name.setter
