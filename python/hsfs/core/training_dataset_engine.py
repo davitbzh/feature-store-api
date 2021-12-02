@@ -240,19 +240,13 @@ class TrainingDatasetEngine:
         for prepared_statement_index in training_dataset.prepared_statements:
             order_in_batch = 0
             prepared_statement = prepared_statements[prepared_statement_index]
+            zipped_arrays = self.zip_arrays_to_tuple(
+                training_dataset, prepared_statement_index, entry
+            )
             with training_dataset.prepared_statement_engine.connect() as mysql_conn:
                 result_proxy = mysql_conn.execute(
                     prepared_statement,
-                    batch_ids=tuple(
-                        zip(
-                            *[
-                                entry.get(key)
-                                for key in training_dataset.pkname_by_serving_index[
-                                    prepared_statement_index
-                                ]
-                            ]
-                        )
-                    ),
+                    batch_ids=zipped_arrays,
                 ).fetchall()
             result_dict = {}
             for row in result_proxy:
@@ -322,7 +316,7 @@ class TrainingDatasetEngine:
                 query_online = self._parametrize_query("batch_ids", query_online)
                 query_online = sql.text(query_online)
                 query_online = query_online.bindparams(
-                    tuple_values=bindparam("batch_ids", expanding=True)
+                    batch_ids=bindparam("batch_ids", expanding=True)
                 )
                 pkname_by_serving_index[
                     prepared_statement.prepared_statement_index
@@ -369,3 +363,16 @@ class TrainingDatasetEngine:
             r"\1:" + name,
             query_online,
         )
+
+    @staticmethod
+    def zip_arrays_to_tuple(training_dataset, prepared_statement_index, entry):
+        array_of_entry = [
+            entry.get(key)
+            for key in training_dataset.pkname_by_serving_index[
+                prepared_statement_index
+            ]
+        ]
+        if len(training_dataset.pkname_by_serving_index) == 1:
+            return tuple(*array_of_entry)
+        else:
+            return tuple(zip(*array_of_entry))
