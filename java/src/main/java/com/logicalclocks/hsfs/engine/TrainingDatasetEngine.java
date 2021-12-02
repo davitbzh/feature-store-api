@@ -404,10 +404,15 @@ public class TrainingDatasetEngine {
     for (int i = 0; i < lists.get(0).size(); i++) {
       List<String> zippedArray = new ArrayList<String>();
       for (List<Object> in : lists) {
-        zippedArray.add(in.get(i).toString());
+        zippedArray.add("'" + in.get(i).toString() + "'");
       }
       zippedTuples.add("(" + String.join(",", zippedArray) + ")");
     }
-    return "(" + String.join(",", zippedTuples) + ")";
+
+    if (zippedTuples.size() == 1) {
+      return zippedTuples.get(0);
+    } else {
+      return "(" + String.join(",", zippedTuples) + ")";
+    }
   }
 }
