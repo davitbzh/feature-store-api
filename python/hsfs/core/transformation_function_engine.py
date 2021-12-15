@@ -1,5 +1,5 @@
 #
-#   Copyright 2020 Logical Clocks AB
+#   Copyright 2021 Logical Clocks AB
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+
 import numpy
 import datetime
 from functools import partial
@@ -20,11 +21,11 @@ from functools import partial
 from hsfs import training_dataset, training_dataset_feature, transformation_function
 from hsfs.core import transformation_function_api, statistics_api
 from hsfs.client.exceptions import RestAPIError
-from hsfs.core.inbuilt_transformation_function import InBuiltTransformationFunction
+from hsfs.core.builtin_transformation_function import BuiltInTransformationFunction
 
 
 class TransformationFunctionEngine:
-    INBUILT_FN_NAMES = [
+    BUILTIN_FN_NAMES = [
         "min_max_scaler",
         "standard_scaler",
         "robust_scaler",
@@ -41,9 +42,9 @@ class TransformationFunctionEngine:
         )
 
     def save(self, transformation_fn_instance):
-        if self.is_inbuilt(transformation_fn_instance):
+        if self.is_builtin(transformation_fn_instance):
             raise ValueError(
-                "Transformation function name '{name:}' with version 1 is reserved for inbuilt hsfs "
+                "Transformation function name '{name:}' with version 1 is reserved for built-in hsfs "
                 "functions. Please use other name or version".format(
                     name=transformation_fn_instance.name
                 )
@@ -95,21 +96,18 @@ class TransformationFunctionEngine:
                     raise ValueError(
                         "Online transformations for training dataset labels are not supported."
                     )
-                feature_group_feature_name = self._infer_original_feature(
-                    training_dataset._querydto, feature_name
-                )
                 training_dataset._features.append(
                     training_dataset_feature.TrainingDatasetFeature(
                         name=feature_name,
-                        feature_group_feature_name=feature_group_feature_name,
+                        feature_group_feature_name=feature_name,
                         type=transformation_fn.output_type,
                         label=False,
                         transformation_function=transformation_fn,
                     )
                 )
 
-    def register_inbuilt_transformation_fns(self):
-        for name in self.INBUILT_FN_NAMES:
+    def register_builtin_transformation_fns(self):
+        for name in self.BUILTIN_FN_NAMES:
             try:
                 self._transformation_function_api.get_transformation_fn(name, 1)[0]
             except RestAPIError as e:
@@ -117,18 +115,18 @@ class TransformationFunctionEngine:
                     e.response.json().get("errorMsg")
                     == "Transformation function does not exist"
                 ):
-                    inbuilt_fn = InBuiltTransformationFunction(name)
+                    builtin_fn = BuiltInTransformationFunction(name)
                     (
-                        inbuilt_source_code,
+                        builtin_source_code,
                         output_type,
-                    ) = inbuilt_fn.generate_source_code()
+                    ) = builtin_fn.generate_source_code()
                     transformation_fn_instance = (
                         transformation_function.TransformationFunction(
                             featurestore_id=self._feature_store_id,
                             name=name,
                             version=1,
                             output_type=output_type,
-                            inbuilt_source_code=inbuilt_source_code,
+                            builtin_source_code=builtin_source_code,
                         )
                     )
                     self._transformation_function_api.register_transformation_fn(
@@ -140,21 +138,18 @@ class TransformationFunctionEngine:
                 ):
                     Warning(e.response.json().get("errorMsg"))
 
-    def is_inbuilt(self, transformation_fn_instance):
-        if (
-            transformation_fn_instance.name in self.INBUILT_FN_NAMES
+    def is_builtin(self, transformation_fn_instance):
+        return (
+            transformation_fn_instance.name in self.BUILTIN_FN_NAMES
             and transformation_fn_instance.version == 1
-        ):
-            return True
-        else:
-            return False
+        )
 
     @staticmethod
-    def populate_inbuilt_fn_arguments(
+    def populate_builtin_fn_arguments(
         feature_name, transformation_function_instance, stat_content
     ):
         if transformation_function_instance.name == "min_max_scaler":
-            min_value, max_value = InBuiltTransformationFunction.min_max_scaler_stats(
+            min_value, max_value = BuiltInTransformationFunction.min_max_scaler_stats(
                 stat_content, feature_name
             )
             transformation_function_instance.transformation_fn = partial(
@@ -163,7 +158,7 @@ class TransformationFunctionEngine:
                 max_value=max_value,
             )
         elif transformation_function_instance.name == "standard_scaler":
-            mean, std_dev = InBuiltTransformationFunction.standard_scaler_stats(
+            mean, std_dev = BuiltInTransformationFunction.standard_scaler_stats(
                 stat_content, feature_name
             )
             transformation_function_instance.transformation_fn = partial(
@@ -172,7 +167,7 @@ class TransformationFunctionEngine:
                 std_dev=std_dev,
             )
         elif transformation_function_instance.name == "robust_scaler":
-            robust_scaler_stats = InBuiltTransformationFunction.robust_scaler_stats(
+            robust_scaler_stats = BuiltInTransformationFunction.robust_scaler_stats(
                 stat_content, feature_name
             )
             transformation_function_instance.transformation_fn = partial(
@@ -182,7 +177,7 @@ class TransformationFunctionEngine:
                 p75=robust_scaler_stats[74],
             )
         elif transformation_function_instance.name == "label_encoder":
-            value_to_index = InBuiltTransformationFunction.encoder_stats(
+            value_to_index = BuiltInTransformationFunction.encoder_stats(
                 stat_content, feature_name
             )
             transformation_function_instance.transformation_fn = partial(
@@ -194,11 +189,11 @@ class TransformationFunctionEngine:
 
         return transformation_function_instance
 
-    def populate_inbuilt_attached_fns(self, attached_transformation_fns, stat_content):
+    def populate_builtin_attached_fns(self, attached_transformation_fns, stat_content):
         for ft_name in attached_transformation_fns:
-            if self.is_inbuilt(attached_transformation_fns[ft_name]):
-                # check if its inbuilt transformation function and populated with statistics arguments
-                transformation_fn = self.populate_inbuilt_fn_arguments(
+            if self.is_builtin(attached_transformation_fns[ft_name]):
+                # check if its built-in transformation function and populated with statistics arguments
+                transformation_fn = self.populate_builtin_fn_arguments(
                     ft_name, attached_transformation_fns[ft_name], stat_content
                 )
                 attached_transformation_fns[ft_name] = transformation_fn
@@ -230,27 +225,3 @@ class TransformationFunctionEngine:
             return "BooleanType()"
         else:
             raise TypeError("Not supported type %s." % output_type)
-
-    @staticmethod
-    def _infer_original_feature(query, feature_name):
-        feature_group_feature_name = None
-        for feature in query._left_features:
-            if feature_name == feature.name:
-                feature_group_feature_name = feature.name
-                break
-
-        for join in query._joins:
-            join_prefix = join._prefix if join._prefix is not None else ""
-            for feature in join.query._left_features:
-                if feature_name == join_prefix + feature.name:
-                    feature_group_feature_name = feature.name
-                    break
-
-        if feature_group_feature_name is None:
-            raise ValueError(
-                "Provided feature name '{feature_name:}' doesn't exist ".format(
-                    feature_name=feature_name
-                )
-            )
-
-        return feature_group_feature_name

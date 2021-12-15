@@ -64,6 +64,7 @@ class TrainingDataset:
         querydto=None,
         label=None,
         transformation_functions=None,
+        train_split=None,
     ):
         self._id = id
         self._name = name
@@ -80,7 +81,7 @@ class TrainingDataset:
         self._prepared_statements = None
         self._serving_keys = None
         self._transformation_functions = transformation_functions
-        self._training_split_name = None
+        self._train_split = train_split
 
         self._training_dataset_api = training_dataset_api.TrainingDatasetApi(
             featurestore_id
@@ -639,14 +640,11 @@ class TrainingDataset:
     def init_prepared_statement(
         self,
         external: Optional[bool] = False,
-        training_split_name: Optional[str] = None,
     ):
         """Initialise and cache parametrized prepared statement to
            retrieve feature vector from online feature store.
 
         # Arguments
-            training_split_name: name of training dataset split  that is used for training. This property is used
-                to determine which split statistics to use for  online transformation functions.
             external: boolean, optional. If set to True, the connection to the
                 online feature store is established using the same host as
                 for the `host` parameter in the [`hsfs.connection()`](project.md#connection) method.
@@ -654,9 +652,7 @@ class TrainingDataset:
                 which relies on the private IP.
         """
         if self.prepared_statements is None:
-            self._training_dataset_engine.init_prepared_statement(
-                self, external, training_split_name
-            )
+            self._training_dataset_engine.init_prepared_statement(self, external)
 
     def get_serving_vector(
         self, entry: Dict[str, Any], external: Optional[bool] = False
@@ -723,13 +719,13 @@ class TrainingDataset:
         self._serving_keys = serving_vector_keys
 
     @property
-    def training_split_name(self):
-        """Set name of training dataset split  that is used for training."""
-        return self._training_split_name
+    def train_split(self):
+        """Set name of training dataset split that is used for training."""
+        return self._train_split
 
-    @training_split_name.setter
-    def training_split_name(self, training_split_name):
-        self._training_split_name = training_split_name
+    @train_split.setter
+    def train_split(self, training_split_name):
+        self._train_split = training_split_name
 
     @property
     def transformation_functions(self):

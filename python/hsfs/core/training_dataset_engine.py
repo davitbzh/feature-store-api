@@ -16,7 +16,6 @@
 
 import re
 import io
-import json
 import avro.schema
 import avro.io
 from sqlalchemy import sql
@@ -29,7 +28,6 @@ from hsfs.core import (
     transformation_function_engine,
 )
 from hsfs.constructor import query
-from hsfs.client.exceptions import FeatureStoreException
 
 
 class TrainingDatasetEngine:
@@ -165,9 +163,7 @@ class TrainingDatasetEngine:
         serving_vector = []
 
         if training_dataset.prepared_statements is None:
-            self.init_prepared_statement(
-                training_dataset, external, training_dataset.training_split_name
-            )
+            self.init_prepared_statement(training_dataset, external)
 
         # check if primary key map correspond to serving_keys.
         if not entry.keys() == training_dataset.serving_keys:
@@ -202,7 +198,7 @@ class TrainingDatasetEngine:
 
         return serving_vector
 
-    def init_prepared_statement(self, training_dataset, external, training_split_name):
+    def init_prepared_statement(self, training_dataset, external):
         online_conn = self._storage_connector_api.get_online_connector()
         mysql_engine = util.create_mysql_engine(online_conn, external)
         prepared_statements = self._training_dataset_api.get_serving_prepared_statement(
@@ -246,12 +242,11 @@ class TrainingDatasetEngine:
         training_dataset.prepared_statement_engine = mysql_engine
         training_dataset.prepared_statements = prepared_statements_dict
         training_dataset.serving_keys = serving_vector_keys
-        training_dataset.training_split_name = training_split_name
 
         # attach transformation functions
-        training_dataset.transformation_functions = (
-            training_dataset.transformation_functions
-        ) = self._get_transformation_fns(training_dataset)
+        training_dataset.transformation_functions = self._get_transformation_fns(
+            training_dataset
+        )
 
     def _get_transformation_fns(self, training_dataset):
         # get attached transformation functions
@@ -261,26 +256,19 @@ class TrainingDatasetEngine:
             )
         )
 
-        # if there are any inbuilt transformation functions get related statistics and populate with relevant arguments
+        # if there are any built-in transformation functions get related statistics and populate with relevant arguments
         td_tffn_stats = training_dataset._statistics_engine.get_last(
             training_dataset, for_transformation=True
         )
-        if td_tffn_stats.content is not None:
+        if training_dataset.splits is None and td_tffn_stats.content is not None:
+            # no splits available
             stats_content = td_tffn_stats.content
         else:
-            if training_dataset.training_split_name is None:
-                raise FeatureStoreException(
-                    "In `init_prepared_statement` you must provide name of the "
-                    "training dataset split that was used for training. "
-                )
-            stats_content = [
-                split_stat["content"]
-                for split_stat in td_tffn_stats.split_statistics
-                if split_stat["name"] == training_dataset.training_split_name
-            ][0]
-            stats_content = json.loads(stats_content)
+            stats_content = td_tffn_stats.split_statistics[
+                training_dataset.train_split
+            ].content
         transformation_fns = (
-            self._transformation_function_engine.populate_inbuilt_attached_fns(
+            self._transformation_function_engine.populate_builtin_attached_fns(
                 transformation_functions, stats_content
             )
         )
