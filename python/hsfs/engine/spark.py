@@ -380,11 +380,13 @@ class Engine:
         split_statistics = None
         if builtin_tffn_features:
             # compute statistics before transformations are applied
+            i = [i for i, name in split_names if name == training_dataset.train_split][
+                0
+            ]
             stats = training_dataset._statistics_engine.compute_transformation_fn_statistics(
                 td_metadata_instance=training_dataset,
                 columns=builtin_tffn_features,
-                feature_dataframe_list=feature_dataframe_list,
-                split_names=split_names,
+                feature_dataframe=feature_dataframe_list[i],
             )
             split_statistics = stats.split_statistics
 
