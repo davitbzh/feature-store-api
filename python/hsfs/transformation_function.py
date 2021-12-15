@@ -1,3 +1,4 @@
+#
 #  Copyright 2021. Logical Clocks AB
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -29,7 +30,7 @@ class TransformationFunction:
         version=None,
         name=None,
         source_code_content=None,
-        inbuilt_source_code=None,
+        builtin_source_code=None,
         output_type=None,
         id=None,
         type=None,
@@ -58,15 +59,15 @@ class TransformationFunction:
             self._output_type = self._transformation_function_engine.infer_spark_type(
                 output_type
             )
-        elif inbuilt_source_code is not None:
-            # user triggered to register inbuilt transformation function
+        elif builtin_source_code is not None:
+            # user triggered to register built-in transformation function
             self._output_type = self._transformation_function_engine.infer_spark_type(
                 output_type
             )
             self._source_code_content = json.dumps(
                 {
                     "module_imports": "",
-                    "transformer_code": inbuilt_source_code,
+                    "transformer_code": builtin_source_code,
                 }
             )
         else:

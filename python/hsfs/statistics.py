@@ -18,6 +18,7 @@ import json
 import humps
 
 from hsfs import util
+from hsfs.split_statistics import SplitStatistics
 
 
 class Statistics:
@@ -41,7 +42,10 @@ class Statistics:
             self._content = json.loads(content)
         else:
             self._content = content
-        self._split_statistics = split_statistics
+        self._split_statistics = {
+            split["name"]: SplitStatistics.from_response_json(split)
+            for split in split_statistics
+        }
         self._for_transformation = for_transformation
 
     @classmethod

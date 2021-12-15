@@ -40,7 +40,7 @@ class TrainingDatasetFeature:
             if isinstance(featuregroup, dict)
             else featuregroup
         )
-        self._feature_group_feature_name = (feature_group_feature_name,)
+        self._feature_group_feature_name = feature_group_feature_name
         self._label = label
         self._transformation_function = (
             TransformationFunction.from_response_json(transformation_function)
