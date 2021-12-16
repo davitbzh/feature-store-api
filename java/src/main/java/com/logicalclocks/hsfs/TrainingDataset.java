@@ -18,6 +18,7 @@ package com.logicalclocks.hsfs;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.Strings;
 import com.logicalclocks.hsfs.engine.CodeEngine;
 import com.logicalclocks.hsfs.engine.StatisticsEngine;
 import com.logicalclocks.hsfs.engine.TrainingDatasetEngine;
@@ -118,12 +119,17 @@ public class TrainingDataset {
   @Getter
   @Setter
   @JsonIgnore
-  private Map<Integer, Map<String, Integer>> preparedStatementParameters;
+  private Map<Integer, TreeMap<String, Integer>> preparedStatementParameters;
 
   @Getter
   @Setter
   @JsonIgnore
   private TreeMap<Integer, PreparedStatement> preparedStatements;
+
+  @Getter
+  @Setter
+  @JsonIgnore
+  private TreeMap<Integer, String> preparedQueryString;
 
   @Getter
   @Setter
@@ -264,29 +270,31 @@ public class TrainingDataset {
   }
 
   /**
-   * Read the content (all splits if multiple available) of the training dataset.
+   * Read the content of the training dataset.
    *
-   * @return
+   * @return Spark Dataset containing the training dataset data
+   * @throws FeatureStoreException if the training dataset has splits and the split was not specified
    */
   public Dataset<Row> read() throws FeatureStoreException, IOException {
     return read("");
   }
 
   /**
-   * Read the content (all splits if multiple available) of the training dataset.
+   * Read the content of the training dataset.
    *
    * @param readOptions options to pass to the Spark read operation
-   * @return
+   * @return Spark Dataset containing the training dataset data
+   * @throws FeatureStoreException if the training dataset has splits and the split was not specified
    */
   public Dataset<Row> read(Map<String, String> readOptions) throws FeatureStoreException, IOException {
-    return trainingDatasetEngine.read(this, "", readOptions);
+    return read("", readOptions);
   }
 
   /**
    * Read all a single split from the training dataset.
    *
    * @param split the split name
-   * @return
+   * @return Spark Dataset containing the training dataset data
    */
   public Dataset<Row> read(String split) throws FeatureStoreException, IOException {
     return read(split, null);
@@ -298,9 +306,13 @@ public class TrainingDataset {
    *
    * @param split       the split name
    * @param readOptions options to pass to the Spark read operation
-   * @return
+   * @return Spark Dataset containing the training dataset data
+   * @throws FeatureStoreException if the training dataset has splits and the split was not specified
    */
   public Dataset<Row> read(String split, Map<String, String> readOptions) throws FeatureStoreException, IOException {
+    if (this.splits != null && !this.splits.isEmpty() && Strings.isNullOrEmpty(split)) {
+      throw new FeatureStoreException("The training dataset has splits, please specify the split you want to read");
+    }
     return trainingDatasetEngine.read(this, split, readOptions);
   }
 
@@ -430,10 +442,10 @@ public class TrainingDataset {
   public String getQuery(Storage storage) throws FeatureStoreException, IOException {
     return getQuery(storage, false);
   }
-
+  
   @JsonIgnore
   public String getQuery(Storage storage, boolean withLabel) throws FeatureStoreException, IOException {
-    return trainingDatasetEngine.getQuery(this, storage, withLabel);
+    return trainingDatasetEngine.getQuery(this, storage, withLabel, false);
   }
 
   @JsonIgnore
@@ -467,10 +479,19 @@ public class TrainingDataset {
    */
   public void initPreparedStatement(boolean external)
       throws SQLException, IOException, FeatureStoreException, ClassNotFoundException {
-    // init prepared statement if it has not already
-    if (this.getPreparedStatements() == null) {
-      trainingDatasetEngine.initPreparedStatement(this, external);
-    }
+    trainingDatasetEngine.initPreparedStatement(this, false, external);
+  }
+
+  /**
+   * Initialise and cache parametrised prepared statement to retrieve batch feature vectors from online feature store.
+   *
+   * @throws SQLException
+   * @throws IOException
+   * @throws FeatureStoreException
+   */
+  public void initPreparedStatement(boolean external, boolean batch) throws SQLException, IOException,
+          FeatureStoreException, ClassNotFoundException {
+    trainingDatasetEngine.initPreparedStatement(this, batch, external);
   }
 
   /**
@@ -501,6 +522,18 @@ public class TrainingDataset {
   public List<Object> getServingVector(Map<String, Object> entry, boolean external)
       throws SQLException, FeatureStoreException, IOException, ClassNotFoundException {
     return trainingDatasetEngine.getServingVector(this, entry, external);
+  }
+
+  @JsonIgnore
+  public List<List<Object>> getServingVectors(Map<String, List<Object>> entry)
+          throws SQLException, FeatureStoreException, IOException, ClassNotFoundException {
+    return getServingVectors(entry, false);
+  }
+
+  @JsonIgnore
+  public List<List<Object>> getServingVectors(Map<String, List<Object>> entry, boolean external)
+          throws SQLException, FeatureStoreException, IOException, ClassNotFoundException {
+    return trainingDatasetEngine.getServingVectors(this, entry, external);
   }
 
   /**

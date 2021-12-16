@@ -61,7 +61,7 @@ class TrainingDatasetApi:
         else:
             return td_list
 
-    def get_query(self, training_dataset_instance, with_label):
+    def get_query(self, training_dataset_instance, with_label, is_hive_query):
         _client = client.get_instance()
         path_params = [
             "project",
@@ -72,7 +72,7 @@ class TrainingDatasetApi:
             training_dataset_instance.id,
             "query",
         ]
-        query_params = {"withLabel": with_label}
+        query_params = {"withLabel": with_label, "hiveQuery": is_hive_query}
         return _client._send_request("GET", path_params, query_params)
 
     def compute(self, training_dataset_instance, td_app_conf):
@@ -142,10 +142,11 @@ class TrainingDatasetApi:
             ),
         )
 
-    def get_serving_prepared_statement(self, training_dataset_instance):
+    def get_serving_prepared_statement(self, training_dataset_instance, batch):
         """Get serving prepared statement metadata object for a training dataset.
         Args:
             training_dataset_instance (training_dataset): the metadata instance of the training dataset
+            batch: boolean. Weather to retrieve batch serving vector or not
         """
         _client = client.get_instance()
         path_params = [
@@ -158,8 +159,9 @@ class TrainingDatasetApi:
             "preparedstatements",
         ]
         headers = {"content-type": "application/json"}
+        query_params = {"batch": batch}
         return serving_prepared_statement.ServingPreparedStatement.from_response_json(
-            _client._send_request("GET", path_params, headers=headers)
+            _client._send_request("GET", path_params, query_params, headers=headers)
         )
 
     def delete(self, training_dataset_instance):

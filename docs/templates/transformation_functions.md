@@ -108,7 +108,7 @@ for `standard_scaler` etc.
     methods are called on this training dataset from scala client hsfs will throw an exception.
 
 
-# Transfromation Function
+# Transformation Function
 
 {{transformation_function}}
 
