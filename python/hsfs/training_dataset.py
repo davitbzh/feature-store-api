@@ -80,6 +80,7 @@ class TrainingDataset:
         self._prepared_statement_engine = None
         self._prepared_statements = None
         self._serving_keys = None
+        self._pkname_by_serving_index = None
         self._transformation_functions = transformation_functions
         self._train_split = train_split
 
@@ -244,12 +245,18 @@ class TrainingDataset:
 
         # Arguments
             split: Name of the split to read, defaults to `None`, reading the entire
-                training dataset.
+                training dataset. If the training dataset has split, the `split` parameter
+                is mandatory.
             read_options: Additional read options as key/value pairs, defaults to `{}`.
         # Returns
             `DataFrame`: The spark dataframe containing the feature data of the
                 training dataset.
         """
+        if self.splits and split is None:
+            raise ValueError(
+                "The training dataset has splits, please specify the split you want to read"
+            )
+
         return self._training_dataset_engine.read(self, split, read_options)
 
     def compute_statistics(self):
@@ -619,7 +626,7 @@ class TrainingDataset:
     @property
     def query(self):
         """Query to generate this training dataset from online feature store."""
-        return self._training_dataset_engine.query(self, True, True)
+        return self._training_dataset_engine.query(self, True, True, False)
 
     def get_query(self, online: bool = True, with_label: bool = False):
         """Returns the query used to generate this training dataset
@@ -635,24 +642,26 @@ class TrainingDataset:
             `str`. Query string for the chosen storage used to generate this training
                 dataset.
         """
-        return self._training_dataset_engine.query(self, online, with_label)
+        return self._training_dataset_engine.query(
+            self, online, with_label, engine.get_type() == "hive"
+        )
 
     def init_prepared_statement(
-        self,
-        external: Optional[bool] = False,
+        self, batch: Optional[bool] = None, external: Optional[bool] = False
     ):
         """Initialise and cache parametrized prepared statement to
            retrieve feature vector from online feature store.
 
         # Arguments
+            batch: boolean, optional. If set to True, prepared statements will be
+                initialised for retrieving serving vectors as a batch.
             external: boolean, optional. If set to True, the connection to the
                 online feature store is established using the same host as
                 for the `host` parameter in the [`hsfs.connection()`](project.md#connection) method.
                 If set to False, the online feature store storage connector is used
                 which relies on the private IP.
         """
-        if self.prepared_statements is None:
-            self._training_dataset_engine.init_prepared_statement(self, external)
+        self._training_dataset_engine.init_prepared_statement(self, batch, external)
 
     def get_serving_vector(
         self, entry: Dict[str, Any], external: Optional[bool] = False
@@ -672,6 +681,25 @@ class TrainingDataset:
             features in training dataset query.
         """
         return self._training_dataset_engine.get_serving_vector(self, entry, external)
+
+    def get_serving_vectors(
+        self, entry: Dict[str, List[Any]], external: Optional[bool] = False
+    ):
+        """Returns assembled serving vectors in batches from online feature store.
+
+        # Arguments
+            entry: dict of feature group primary key names as keys and value as list of primary keys provided by
+                serving application.
+            external: boolean, optional. If set to True, the connection to the
+                online feature store is established using the same host as
+                for the `host` parameter in the [`hsfs.connection()`](project.md#connection) method.
+                If set to False, the online feature store storage connector is used
+                which relies on the private IP.
+        # Returns
+            `List[list]` List of lists of feature values related to provided primary keys, ordered according to
+            positions of this features in training dataset query.
+        """
+        return self._training_dataset_engine.get_serving_vectors(self, entry, external)
 
     @property
     def label(self):
