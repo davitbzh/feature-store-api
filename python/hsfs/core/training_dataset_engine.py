@@ -354,20 +354,16 @@ class TrainingDatasetEngine:
             )
         )
 
-        # if there are any built-in transformation functions get related statistics and populate with relevant arguments
+        # if there are any built-in transformation functions get related statistics and
+        # populate with relevant arguments
+        # there should be only one statistics object with for_transformation=true
         td_tffn_stats = training_dataset._statistics_engine.get_last(
             training_dataset, for_transformation=True
         )
-        if training_dataset.splits is None and td_tffn_stats.content is not None:
-            # no splits available
-            stats_content = td_tffn_stats.content
-        else:
-            stats_content = td_tffn_stats.split_statistics[
-                training_dataset.train_split
-            ].content
+
         transformation_fns = (
             self._transformation_function_engine.populate_builtin_attached_fns(
-                transformation_functions, stats_content
+                transformation_functions, td_tffn_stats.content
             )
         )
         return transformation_fns

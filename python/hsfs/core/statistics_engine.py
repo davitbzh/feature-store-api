@@ -119,30 +119,16 @@ class StatisticsEngine:
         columns,
         feature_dataframe=None,
     ):
-        statistics_of_splits = []
         commit_time = int(float(datetime.datetime.now().timestamp()) * 1000)
         content_str = self.profile_transformation_fn_statistics(
             feature_dataframe, columns
         )
 
-        if td_metadata_instance.train_split is not None:
-            statistics_of_splits.append(
-                split_statistics.SplitStatistics(
-                    td_metadata_instance.train_split,
-                    content_str,
-                )
-            )
-            stats = statistics.Statistics(
-                commit_time=commit_time,
-                for_transformation=True,
-                split_statistics=statistics_of_splits,
-            )
-        else:
-            stats = statistics.Statistics(
-                commit_time=commit_time,
-                content=content_str,
-                for_transformation=True,
-            )
+        stats = statistics.Statistics(
+            commit_time=commit_time,
+            content=content_str,
+            for_transformation=True,
+        )
         self._statistics_api.post(td_metadata_instance, stats)
         return stats
 
