@@ -454,6 +454,7 @@ class TrainingDataset:
             "seed": self._seed,
             "queryDTO": self._querydto.to_dict() if self._querydto else None,
             "statisticsConfig": self._statistics_config,
+            "trainSplit": self._train_split,
         }
 
     @property

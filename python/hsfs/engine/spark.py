@@ -379,25 +379,25 @@ class Engine:
         split_names,
         builtin_tffn_features,
     ):
-        split_statistics = None
+        stats = None
         if builtin_tffn_features:
             # compute statistics before transformations are applied
-            i = [i for i, name in split_names if name == training_dataset.train_split][
-                0
-            ]
+            i = [
+                i
+                for i, name in enumerate(split_names)
+                if name == training_dataset.train_split
+            ][0]
             stats = training_dataset._statistics_engine.compute_transformation_fn_statistics(
                 td_metadata_instance=training_dataset,
                 columns=builtin_tffn_features,
                 feature_dataframe=feature_dataframe_list[i],
             )
-            split_statistics = stats.split_statistics
 
         for i in range(len(feature_dataframe_list)):
             # Populate builtin transformations (if any) with respective arguments for each split
-            if split_statistics:
+            if stats is not None:
                 training_dataset._transformation_function_engine.populate_builtin_attached_fns(
-                    training_dataset.transformation_functions,
-                    split_statistics[training_dataset.train_split].content,
+                    training_dataset.transformation_functions, stats.content
                 )
             # apply transformation functions (they are applied separately to each split)
             dataset = self._apply_transformation_function(

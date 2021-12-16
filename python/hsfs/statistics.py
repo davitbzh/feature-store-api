@@ -42,10 +42,16 @@ class Statistics:
             self._content = json.loads(content)
         else:
             self._content = content
-        self._split_statistics = {
-            split["name"]: SplitStatistics.from_response_json(split)
-            for split in split_statistics
-        }
+        self._split_statistics = (
+            [
+                SplitStatistics.from_response_json(split)
+                if isinstance(split, dict)
+                else split
+                for split in split_statistics
+            ]
+            if split_statistics is not None
+            else []
+        )
         self._for_transformation = for_transformation
 
     @classmethod
