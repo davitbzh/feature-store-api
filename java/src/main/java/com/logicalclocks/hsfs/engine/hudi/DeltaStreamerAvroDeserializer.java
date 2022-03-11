@@ -16,6 +16,10 @@
 
 package com.logicalclocks.hsfs.engine.hudi;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.logicalclocks.hsfs.FeatureStoreException;
+import com.logicalclocks.hsfs.engine.FeatureGroupUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -26,14 +30,28 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord> {
+  private static final Logger LOGGER = LoggerFactory.getLogger(DeltaStreamerAvroDeserializer.class);
 
+  private ObjectMapper objectMapper = new ObjectMapper();
   private Schema schema;
+  private Schema encodedSchema;
   private BinaryDecoder binaryDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
+  private List<String> complexFeatures = null;
+  private DatumReader<GenericRecord> encodedDatumReader;
+  private FeatureGroupUtils featureGroupUtils = new FeatureGroupUtils();
+
+  private Map<String, Schema> complexFeatureSchemas = new HashMap<>();
 
   public DeltaStreamerAvroDeserializer() {
   }
@@ -41,24 +59,76 @@ public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     String featureGroupSchema = (String) configs.get(HudiEngine.FEATURE_GROUP_SCHEMA);
+    String encodedFeatureGroupSchema = (String) configs.get(HudiEngine.FEATURE_GROUP_ENCODED_SCHEMA);
+    String complexFeatureString = (String) configs.get(HudiEngine.FEATURE_GROUP_COMPLEX_FEATURES);
+
+    try {
+      String[] stringArray = objectMapper.readValue(complexFeatureString, String[].class);
+      this.complexFeatures = Arrays.asList(stringArray);
+    } catch (JsonProcessingException e) {
+      LOGGER.error("Could not deserialize complex feature array: " + complexFeatureString, e);
+    }
+
+    // full schema is only to get partial schema of complex features
     this.schema = new Schema.Parser().parse(featureGroupSchema);
+    // encoded schema has binary type for complex features
+    this.encodedSchema = new Schema.Parser().parse(encodedFeatureGroupSchema);
+    this.encodedDatumReader = new GenericDatumReader<>(this.encodedSchema);
+
+    for (String complexFeature : complexFeatures) {
+      try {
+        complexFeatureSchemas.put(complexFeature,
+            new Schema.Parser().parse(featureGroupUtils.getFeatureAvroSchema(complexFeature, schema)));
+      } catch (FeatureStoreException | IOException e) {
+        LOGGER.error("Could not deserialize complex feature schema", e);
+      }
+    }
   }
 
   @Override
   public GenericRecord deserialize(String topic, byte[] data) {
+    GenericRecord finalResult = new GenericData.Record(this.schema);
+    GenericRecord result = null;
+
     try {
-      GenericRecord result = null;
       if (data != null) {
-        DatumReader<GenericRecord> datumReader = new GenericDatumReader<>(this.schema);
         Decoder decoder = DecoderFactory.get().binaryDecoder(data, binaryDecoder);
-        result = new GenericData.Record(this.schema);
-        result = datumReader.read(result, decoder);
+        result = new GenericData.Record(this.encodedSchema);
+        result = encodedDatumReader.read(result, decoder);
       }
-      return result;
     } catch (Exception ex) {
       throw new SerializationException(
           "Can't deserialize data '" + Arrays.toString(data) + "' from topic '" + topic + "'", ex);
     }
+
+    Schema featureSchema;
+    byte[] featureData;
+    GenericRecord featureResult;
+    DatumReader<GenericRecord> datumReader;
+    Decoder decoder;
+
+    for (String complexFeature : complexFeatures) {
+      featureData = (byte[]) result.get(complexFeature);
+      try {
+        featureSchema = new Schema.Parser().parse(featureGroupUtils.getFeatureAvroSchema(complexFeature, schema));
+
+        datumReader = new GenericDatumReader<>(featureSchema);
+        decoder = DecoderFactory.get().binaryDecoder(featureData, binaryDecoder);
+        featureResult = new GenericData.Record(featureSchema);
+        featureResult = datumReader.read(featureResult, decoder);
+      } catch (Exception ex) {
+        throw new SerializationException(
+          "Can't deserialize data '" + Arrays.toString(data) + "' from topic '" + topic + "'", ex);
+      }
+      finalResult.put(complexFeature, featureResult);
+    }
+
+    for (String feature : this.schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList())) {
+      if (!complexFeatures.contains(feature)) {
+        finalResult.put(feature, result.get(feature));
+      }
+    }
+    return finalResult;
   }
 
   @Override

@@ -42,6 +42,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.json.JSONArray;
 import scala.collection.Seq;
 
 import java.io.IOException;
@@ -100,6 +101,8 @@ public class HudiEngine {
   protected static final String INITIAL_CHECKPOINT_PROVIDER =
       "com.logicalclocks.hsfs.engine.hudi.InitialCheckpointFromAnotherHoodieTimelineProvider";
   protected static final String FEATURE_GROUP_SCHEMA = "com.logicalclocks.hsfs.FeatureGroup.schema";
+  protected static final String FEATURE_GROUP_ENCODED_SCHEMA = "com.logicalclocks.hsfs.FeatureGroup.encodedSchema";
+  protected static final String FEATURE_GROUP_COMPLEX_FEATURES = "com.logicalclocks.hsfs.FeatureGroup.complexFeatures";
   protected static final String KAFKA_SOURCE = "com.logicalclocks.hsfs.engine.hudi.DeltaStreamerKafkaSource";
   protected static final String SCHEMA_PROVIDER = "com.logicalclocks.hsfs.engine.hudi.DeltaStreamerSchemaProvider";
   protected static final String DELTA_STREAMER_TRANSFORMER =
@@ -280,6 +283,9 @@ public class HudiEngine {
     hudiWriteOpts.put(CHECKPOINT_PROVIDER_PATH_PROP, streamFeatureGroup.getLocation());
     hudiWriteOpts.put(HUDI_KAFKA_TOPIC, streamFeatureGroup.getOnlineTopicName());
     hudiWriteOpts.put(FEATURE_GROUP_SCHEMA, streamFeatureGroup.getAvroSchema());
+    hudiWriteOpts.put(FEATURE_GROUP_ENCODED_SCHEMA, streamFeatureGroup.getEncodedAvroSchema());
+    hudiWriteOpts.put(FEATURE_GROUP_COMPLEX_FEATURES,
+        new JSONArray(streamFeatureGroup.getComplexFeatures()).toString());
     hudiWriteOpts.put(DELTA_SOURCE_ORDERING_FIELD_OPT_KEY,
         hudiWriteOpts.get(HUDI_PRECOMBINE_FIELD));
     writeOptions.putAll(hudiWriteOpts);
