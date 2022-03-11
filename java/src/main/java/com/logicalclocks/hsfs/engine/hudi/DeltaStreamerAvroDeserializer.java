@@ -43,15 +43,16 @@ import java.util.stream.Collectors;
 public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord> {
   private static final Logger LOGGER = LoggerFactory.getLogger(DeltaStreamerAvroDeserializer.class);
 
-  private ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper();
   private Schema schema;
   private Schema encodedSchema;
-  private BinaryDecoder binaryDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
+  private final BinaryDecoder binaryDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
   private List<String> complexFeatures = null;
   private DatumReader<GenericRecord> encodedDatumReader;
-  private FeatureGroupUtils featureGroupUtils = new FeatureGroupUtils();
+  private final FeatureGroupUtils featureGroupUtils = new FeatureGroupUtils();
 
-  private Map<String, Schema> complexFeatureSchemas = new HashMap<>();
+  private final Map<String, Schema> complexFeatureSchemas = new HashMap<>();
+  private final Map<String, DatumReader<GenericRecord>> complexFeaturesDatumReaders = new HashMap<>();
 
   public DeltaStreamerAvroDeserializer() {
   }
@@ -66,7 +67,7 @@ public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord
       String[] stringArray = objectMapper.readValue(complexFeatureString, String[].class);
       this.complexFeatures = Arrays.asList(stringArray);
     } catch (JsonProcessingException e) {
-      LOGGER.error("Could not deserialize complex feature array: " + complexFeatureString, e);
+      throw new SerializationException("Could not deserialize complex feature array: " + complexFeatureString, e);
     }
 
     // full schema is only to get partial schema of complex features
@@ -76,12 +77,15 @@ public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord
     this.encodedDatumReader = new GenericDatumReader<>(this.encodedSchema);
 
     for (String complexFeature : complexFeatures) {
+      Schema featureSchema = null;
       try {
-        complexFeatureSchemas.put(complexFeature,
-            new Schema.Parser().parse(featureGroupUtils.getFeatureAvroSchema(complexFeature, schema)));
+        featureSchema = new Schema.Parser().parse(featureGroupUtils.getFeatureAvroSchema(complexFeature, schema));
       } catch (FeatureStoreException | IOException e) {
-        LOGGER.error("Could not deserialize complex feature schema", e);
+        throw new SerializationException("Can't deserialize complex feature schema: " + complexFeature, e);
       }
+
+      complexFeatureSchemas.put(complexFeature, featureSchema);
+      complexFeaturesDatumReaders.put(complexFeature, new GenericDatumReader<>(featureSchema));
     }
   }
 
@@ -109,16 +113,16 @@ public class DeltaStreamerAvroDeserializer implements Deserializer<GenericRecord
 
     for (String complexFeature : complexFeatures) {
       featureData = (byte[]) result.get(complexFeature);
-      try {
-        featureSchema = new Schema.Parser().parse(featureGroupUtils.getFeatureAvroSchema(complexFeature, schema));
+      featureSchema = complexFeatureSchemas.get(complexFeature);
 
-        datumReader = new GenericDatumReader<>(featureSchema);
+      try {
         decoder = DecoderFactory.get().binaryDecoder(featureData, binaryDecoder);
         featureResult = new GenericData.Record(featureSchema);
-        featureResult = datumReader.read(featureResult, decoder);
+        featureResult = complexFeaturesDatumReaders.get(complexFeature).read(featureResult, decoder);
       } catch (Exception ex) {
         throw new SerializationException(
-          "Can't deserialize data '" + Arrays.toString(data) + "' from topic '" + topic + "'", ex);
+          "Can't deserialize complex feature data '" + Arrays.toString(featureData) + "' from topic '" + topic +
+            "' with schema: " + featureSchema.toString(true), ex);
       }
       finalResult.put(complexFeature, featureResult);
     }
